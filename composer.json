@@ -38,10 +38,16 @@
         "pestphp/pest": "^3.8",
         "php-http/mock-client": "^1.6",
         "phpstan/phpstan": "^2.2",
-        "phpstan/phpstan-strict-rules": "^2.0"
+        "phpstan/phpstan-strict-rules": "^2.0",
+        "symfony/config": "^6.4||^7.0",
+        "symfony/dependency-injection": "^6.4||^7.0",
+        "symfony/http-client": "^6.4||^7.0",
+        "symfony/http-kernel": "^6.4||^7.0"
     },
     "suggest": {
-        "illuminate/support": "Required to use the Laravel integration (^11.0 or ^12.0)"
+        "illuminate/support": "Required to use the Laravel integration (^11.0 or ^12.0)",
+        "symfony/framework-bundle": "Required to use the Symfony integration (^6.4 or ^7.0)",
+        "symfony/http-client": "Lets the Symfony integration send requests through the application's HTTP client (^6.4 or ^7.0)"
     },
     "scripts": {
         "stan": "phpstan analyse --memory-limit=1G",
