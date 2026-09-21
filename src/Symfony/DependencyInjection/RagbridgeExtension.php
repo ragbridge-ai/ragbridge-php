@@ -60,6 +60,12 @@ final class RagbridgeExtension extends Extension
         $retry = $config['retry'];
         assert(is_array($retry));
 
+        // A literal value is checked here. An environment variable placeholder is a string
+        // until run time, when RetryPolicy checks the value it resolves to.
+        if (is_int($retry['max_attempts']) && $retry['max_attempts'] < 1) {
+            throw new InvalidConfigurationException('The "ragbridge.retry.max_attempts" option must be at least 1.');
+        }
+
         $container->setDefinition(RagbridgeClient::class, $this->clientDefinition($container, $this->retryPolicyDefinition($retry)));
         $container->setAlias('ragbridge.client', RagbridgeClient::class);
     }

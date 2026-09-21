@@ -58,10 +58,12 @@ final class Configuration implements ConfigurationInterface
                     ->info('Sends requests again that failed for a transient reason: a connection error, or HTTP 429, 502, 503 or 504. Off by default.')
                     ->canBeEnabled()
                     ->children()
+                        // The lower limit of 1 is checked by the extension, not with min(): before
+                        // Symfony 6.4.x the limit is also applied to the stand-in value (0) of an
+                        // environment variable placeholder and would reject %env(int:...)%.
                         ->integerNode('max_attempts')
-                            ->info('Total number of tries, including the first.')
+                            ->info('Total number of tries, including the first. At least 1.')
                             ->defaultValue(3)
-                            ->min(1)
                         ->end()
                         ->integerNode('base_delay_ms')
                             ->info('Pause before the first retry, in milliseconds. It doubles for each further retry.')

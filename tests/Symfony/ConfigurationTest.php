@@ -118,7 +118,6 @@ describe('retry', function (): void {
         expect(fn() => processedConfig([['base_url' => 'http://localhost:8000', 'retry' => ['enabled' => true, $option => $value]]]))
             ->toThrow(InvalidConfigurationException::class, $option);
     })->with([
-        'no attempts' => ['max_attempts', 0],
         'negative base delay' => ['base_delay_ms', -1],
         'negative maximum delay' => ['max_delay_ms', -1],
     ]);

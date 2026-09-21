@@ -240,6 +240,11 @@ describe('retries', function (): void {
         'on' => [true, true],
     ]);
 
+    it('reject a maximum number of attempts below one', function (): void {
+        expect(fn() => ContainerFactory::build(['base_url' => 'http://localhost:8000', 'retry' => ['enabled' => true, 'max_attempts' => 0]]))
+            ->toThrow(InvalidConfigurationException::class, 'ragbridge.retry.max_attempts');
+    });
+
     it('are available without the Symfony HTTP client', function (): void {
         $http = new RecordingClient(Fixtures::response(503), Fixtures::jsonResponse(200, 'documents'));
         FixedClientStrategy::install($http);
