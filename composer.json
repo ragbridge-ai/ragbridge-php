@@ -1,0 +1,33 @@
+{
+    "name": "ragbridge/php",
+    "description": "PHP client for the ragbridge retrieval-augmented generation service",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.2",
+        "php-http/discovery": "^1.20",
+        "psr/http-client": "^1.0",
+        "psr/http-factory": "^1.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "Ragbridge\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Ragbridge\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "platform": {
+            "php": "8.2.0"
+        },
+        "sort-packages": true,
+        "allow-plugins": {
+            "php-http/discovery": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
