@@ -1,0 +1,18 @@
+[
+  {
+    "id": "3f2b8c1e-5d4a-4b7e-9c61-0a1b2c3d4e5f",
+    "filename": "handbook.pdf",
+    "content_type": "application/pdf",
+    "status": "ready",
+    "error": null,
+    "created_at": "2026-03-14T09:26:53.589793Z"
+  },
+  {
+    "id": "7d1e2f3a-4b5c-4d6e-8f70-a1b2c3d4e5f6",
+    "filename": "notes.md",
+    "content_type": "text/markdown",
+    "status": "failed",
+    "error": "no extractable text",
+    "created_at": "2026-03-15T08:00:00Z"
+  }
+]

@@ -14,6 +14,7 @@ use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Http\Message\StreamInterface;
+use Ragbridge\Dto\Document;
 use Ragbridge\Dto\QueryResult;
 use Ragbridge\Exception\ApiException;
 use Ragbridge\Exception\AuthenticationException;
@@ -23,6 +24,7 @@ use Ragbridge\Exception\RequestFailedException;
 use Ragbridge\Exception\ServerException;
 use Ragbridge\Exception\TransportException;
 use Ragbridge\Exception\ValidationException;
+use Ragbridge\Internal\MultipartFile;
 
 /**
  * Client for the ragbridge HTTP API.
@@ -93,6 +95,94 @@ final readonly class RagbridgeClient
         }
 
         return $this->hydrate(QueryResult::fromArray(...), $this->object($this->send('POST', '/query', $body)));
+    }
+
+    /**
+     * Uploads a file from disk. The file is streamed, not read into memory.
+     *
+     * The service accepts plain text, Markdown and PDF. Uploading the same content again
+     * returns the existing document. Large files are processed asynchronously, so the
+     * returned document can still be pending: poll {@see document()} until it is ready.
+     *
+     * @param string|null $filename name stored in the service, the file's own name when null
+     * @param string|null $contentType media type, guessed from the file extension when null
+     *
+     * @throws InvalidArgumentException when the file does not exist or is not readable
+     * @throws Exception\RagbridgeException
+     */
+    public function upload(string $path, ?string $filename = null, ?string $contentType = null): Document
+    {
+        if (! is_file($path) || ! is_readable($path)) {
+            throw new InvalidArgumentException(sprintf('The file "%s" does not exist or is not readable.', $path));
+        }
+
+        $stream = $this->streamFactory->createStreamFromFile($path, 'rb');
+
+        try {
+            return $this->uploadStream($stream, $filename ?? basename($path), $contentType);
+        } finally {
+            $stream->close();
+        }
+    }
+
+    /**
+     * Uploads the remaining content of a stream, which the caller keeps ownership of.
+     *
+     * @param string $filename name stored in the service
+     * @param string|null $contentType media type, guessed from the filename extension when null
+     *
+     * @throws Exception\RagbridgeException
+     */
+    public function uploadStream(StreamInterface $stream, string $filename, ?string $contentType = null): Document
+    {
+        $multipart = MultipartFile::create(
+            $this->streamFactory,
+            $stream,
+            $filename,
+            $contentType ?? self::guessContentType($filename),
+        );
+
+        $data = $this->send('POST', '/documents', stream: $multipart->body(), contentType: $multipart->contentType());
+
+        return $this->hydrate(Document::fromArray(...), $this->object($data));
+    }
+
+    /**
+     * Lists the documents stored in the service.
+     *
+     * @return list<Document>
+     *
+     * @throws Exception\RagbridgeException
+     */
+    public function documents(): array
+    {
+        $items = $this->objects($this->send('GET', '/documents'));
+
+        return array_map(fn(array $item): Document => $this->hydrate(Document::fromArray(...), $item), $items);
+    }
+
+    /**
+     * Fetches one document, for example to check whether an upload has finished processing.
+     *
+     * @throws NotFoundException when no document has this id
+     * @throws Exception\RagbridgeException
+     */
+    public function document(string $id): Document
+    {
+        $data = $this->send('GET', '/documents/' . rawurlencode($id));
+
+        return $this->hydrate(Document::fromArray(...), $this->object($data));
+    }
+
+    /**
+     * Deletes a document together with everything derived from it.
+     *
+     * @throws NotFoundException when no document has this id
+     * @throws Exception\RagbridgeException
+     */
+    public function deleteDocument(string $id): void
+    {
+        $this->send('DELETE', '/documents/' . rawurlencode($id));
     }
 
     /**
@@ -214,6 +304,40 @@ final readonly class RagbridgeClient
         }
 
         return $decoded;
+    }
+
+    /**
+     * @return list<array<mixed>>
+     *
+     * @throws InvalidResponseException
+     */
+    private function objects(mixed $decoded): array
+    {
+        if (! is_array($decoded) || ! array_is_list($decoded)) {
+            throw InvalidResponseException::because(sprintf('expected a JSON list, got %s', get_debug_type($decoded)));
+        }
+
+        $objects = [];
+
+        foreach ($decoded as $index => $item) {
+            if (! is_array($item) || array_is_list($item)) {
+                throw InvalidResponseException::because(sprintf('expected item %d to be a JSON object, got %s', $index, get_debug_type($item)));
+            }
+
+            $objects[] = $item;
+        }
+
+        return $objects;
+    }
+
+    private static function guessContentType(string $filename): string
+    {
+        return match (strtolower(pathinfo($filename, PATHINFO_EXTENSION))) {
+            'pdf' => 'application/pdf',
+            'md', 'markdown' => 'text/markdown',
+            'txt' => 'text/plain',
+            default => 'application/octet-stream',
+        };
     }
 
     /**
