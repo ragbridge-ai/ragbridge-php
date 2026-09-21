@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Ragbridge;
 
 use Closure;
+use Http\Discovery\Psr17FactoryDiscovery;
+use Http\Discovery\Psr18ClientDiscovery;
 use InvalidArgumentException;
 use JsonException;
 use Psr\Http\Client\ClientExceptionInterface;
@@ -33,8 +35,9 @@ use Ragbridge\Internal\MultipartFile;
  * PSR-18 client and turns responses into typed objects or exceptions. Retrieval and
  * generation happen in the service.
  *
- * Every failure is reported as an exception implementing
- * {@see Exception\RagbridgeException}.
+ * A failed call is reported as an exception implementing {@see Exception\RagbridgeException}.
+ * Invalid arguments, such as a malformed base URL or a missing file, raise an
+ * InvalidArgumentException instead.
  */
 final readonly class RagbridgeClient
 {
@@ -67,6 +70,29 @@ final readonly class RagbridgeClient
         }
 
         $this->baseUrl = rtrim($baseUrl, '/');
+    }
+
+    /**
+     * Creates a client that uses whatever PSR-18 client and PSR-17 factories are installed.
+     *
+     * The implementations are located with php-http/discovery. Use the constructor to
+     * choose them explicitly, for example to share the HTTP client of your application.
+     *
+     * @param string $baseUrl root URL of the service, for example http://localhost:8000
+     * @param string|null $apiKey sent as a bearer token when set
+     *
+     * @throws InvalidArgumentException when the base URL is not an absolute http(s) URL
+     * @throws \Http\Discovery\Exception\NotFoundException when no PSR-18 client or PSR-17 factory is installed
+     */
+    public static function create(string $baseUrl, ?string $apiKey = null): self
+    {
+        return new self(
+            Psr18ClientDiscovery::find(),
+            Psr17FactoryDiscovery::findRequestFactory(),
+            Psr17FactoryDiscovery::findStreamFactory(),
+            $baseUrl,
+            $apiKey,
+        );
     }
 
     /**
