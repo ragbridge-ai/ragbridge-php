@@ -30,6 +30,9 @@ use Ragbridge\Exception\ServerException;
 use Ragbridge\Exception\TransportException;
 use Ragbridge\Exception\ValidationException;
 use Ragbridge\Internal\MultipartFile;
+use Ragbridge\Internal\RetryAfter;
+use RuntimeException;
+use Throwable;
 
 /**
  * Client for the ragbridge HTTP API.
@@ -41,6 +44,8 @@ use Ragbridge\Internal\MultipartFile;
  * The class is not final so that applications and framework facades can replace it with a
  * test double. Its state is immutable.
  *
+ * Failed requests are not repeated unless a {@see RetryPolicy} is given.
+ *
  * A failed call is reported as an exception implementing {@see Exception\RagbridgeException}.
  * Invalid arguments, such as a malformed base URL or a missing file, raise an
  * InvalidArgumentException instead.
@@ -51,9 +56,16 @@ class RagbridgeClient
 
     private readonly ?string $apiKey;
 
+    /** @var Closure(int): void */
+    private readonly Closure $sleep;
+
     /**
      * @param string $baseUrl root URL of the service, for example http://localhost:8000
      * @param string|null $apiKey sent as a bearer token; null or an empty string means no key
+     * @param RetryPolicy|null $retryPolicy when set, failed requests are sent again as the policy says
+     * @param Closure(int): void|null $sleep waits for the given number of milliseconds between two
+     *                                       tries; usleep() when null. Replace it in tests to avoid
+     *                                       waiting.
      *
      * @throws InvalidArgumentException when the base URL is not an absolute http(s) URL
      */
@@ -63,6 +75,8 @@ class RagbridgeClient
         private readonly StreamFactoryInterface $streamFactory,
         string $baseUrl,
         ?string $apiKey = null,
+        private readonly ?RetryPolicy $retryPolicy = null,
+        ?Closure $sleep = null,
     ) {
         $parts = parse_url($baseUrl);
 
@@ -79,6 +93,9 @@ class RagbridgeClient
 
         $this->baseUrl = rtrim($baseUrl, '/');
         $this->apiKey = $apiKey === '' ? null : $apiKey;
+        $this->sleep = $sleep ?? static function (int $milliseconds): void {
+            usleep($milliseconds * 1000);
+        };
     }
 
     /**
@@ -89,11 +106,12 @@ class RagbridgeClient
      *
      * @param string $baseUrl root URL of the service, for example http://localhost:8000
      * @param string|null $apiKey sent as a bearer token when set
+     * @param RetryPolicy|null $retryPolicy when set, failed requests are sent again as the policy says
      *
      * @throws InvalidArgumentException when the base URL is not an absolute http(s) URL
      * @throws \Http\Discovery\Exception\NotFoundException when no PSR-18 client or PSR-17 factory is installed
      */
-    public static function create(string $baseUrl, ?string $apiKey = null): self
+    public static function create(string $baseUrl, ?string $apiKey = null, ?RetryPolicy $retryPolicy = null): self
     {
         return new self(
             Psr18ClientDiscovery::find(),
@@ -101,6 +119,7 @@ class RagbridgeClient
             Psr17FactoryDiscovery::findStreamFactory(),
             $baseUrl,
             $apiKey,
+            $retryPolicy,
         );
     }
 
@@ -215,7 +234,18 @@ class RagbridgeClient
             $contentType ?? self::guessContentType($filename),
         );
 
-        $data = $this->send('POST', '/documents', stream: $multipart->body(), contentType: $multipart->contentType());
+        // A retry has to send the body again from where it started, which may not be the
+        // start of the caller's stream. Without a way back the upload is not retried.
+        $body = $multipart->body();
+        $start = $stream->isSeekable() ? $stream->tell() : 0;
+        $rewind = $body->isSeekable()
+            ? static function () use ($body, $stream, $start): void {
+                $body->rewind();
+                $stream->seek($start);
+            }
+        : null;
+
+        $data = $this->send('POST', '/documents', stream: $body, contentType: $multipart->contentType(), rewind: $rewind);
 
         return $this->hydrate(Document::fromArray(...), $this->object($data));
     }
@@ -306,8 +336,13 @@ class RagbridgeClient
     /**
      * Sends a request and returns the decoded JSON body, or null when the response has none.
      *
+     * When a retry policy applies to the request, a failure that the policy considers
+     * transient is followed by another try, after a pause.
+     *
      * @param array<string, mixed>|null $json request body, encoded as JSON
      * @param StreamInterface|null $stream raw request body, used instead of $json
+     * @param Closure(): void|null $rewind puts $stream back at its start; the request is retried
+     *                                     only when this is given, as the body cannot be sent twice otherwise
      *
      * @throws Exception\RagbridgeException
      */
@@ -317,7 +352,55 @@ class RagbridgeClient
         ?array $json = null,
         ?StreamInterface $stream = null,
         ?string $contentType = null,
+        ?Closure $rewind = null,
     ): mixed {
+        $policy = $this->retryPolicy !== null
+            && $this->retryPolicy->appliesTo($method)
+            && ($stream === null || $rewind !== null)
+                ? $this->retryPolicy
+                : null;
+
+        $attempt = 1;
+
+        while (true) {
+            $request = $this->buildRequest($method, $path, $json, $stream, $contentType);
+
+            try {
+                $response = $this->dispatch($request);
+            } catch (TransportException $e) {
+                $this->pauseBeforeRetry($policy, $attempt++, null, $e, $rewind);
+
+                continue;
+            }
+
+            $status = $response->getStatusCode();
+            $body = (string) $response->getBody();
+
+            if ($status >= 200 && $status < 300) {
+                return $body === '' ? null : $this->decode($body);
+            }
+
+            $error = $this->errorFor($status, $this->decodeLeniently($body));
+
+            if ($policy === null || ! $policy->isRetryableStatus($status)) {
+                throw $error;
+            }
+
+            $retryAfter = RetryAfter::milliseconds($response->getHeaderLine('Retry-After'));
+            $this->pauseBeforeRetry($policy, $attempt++, $retryAfter, $error, $rewind);
+        }
+    }
+
+    /**
+     * @param array<string, mixed>|null $json
+     */
+    private function buildRequest(
+        string $method,
+        string $path,
+        ?array $json,
+        ?StreamInterface $stream,
+        ?string $contentType,
+    ): RequestInterface {
         $request = $this->requestFactory
             ->createRequest($method, $this->baseUrl . $path)
             ->withHeader('Accept', 'application/json');
@@ -327,6 +410,7 @@ class RagbridgeClient
         }
 
         if ($json !== null) {
+            // A new body for every try: a sent stream may have been read to its end.
             $request = $request
                 ->withHeader('Content-Type', 'application/json')
                 ->withBody($this->streamFactory->createStream($this->encode($json)));
@@ -336,15 +420,43 @@ class RagbridgeClient
                 ->withBody($stream);
         }
 
-        $response = $this->dispatch($request);
-        $status = $response->getStatusCode();
-        $body = (string) $response->getBody();
+        return $request;
+    }
 
-        if ($status < 200 || $status >= 300) {
-            throw $this->errorFor($status, $this->decodeLeniently($body));
+    /**
+     * Waits before the next try, or throws the failure when there is not going to be one.
+     *
+     * @param RetryPolicy|null $policy null when the request is not to be retried at all
+     * @param int $attempt number of the try that failed, starting at 1
+     * @param int|null $retryAfterMs wait requested by the service
+     * @param Closure(): void|null $rewind puts a streamed body back at its start
+     *
+     * @throws Throwable the failure, when the request is not retried
+     */
+    private function pauseBeforeRetry(
+        ?RetryPolicy $policy,
+        int $attempt,
+        ?int $retryAfterMs,
+        Throwable $failure,
+        ?Closure $rewind,
+    ): void {
+        $delay = $policy === null || $attempt >= $policy->maxAttempts
+            ? null
+            : $policy->delayMs($attempt, $retryAfterMs);
+
+        if ($delay === null) {
+            throw $failure;
         }
 
-        return $body === '' ? null : $this->decode($body);
+        if ($rewind !== null) {
+            try {
+                $rewind();
+            } catch (RuntimeException) {
+                throw $failure;
+            }
+        }
+
+        ($this->sleep)($delay);
     }
 
     /**

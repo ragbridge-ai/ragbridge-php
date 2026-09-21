@@ -8,12 +8,16 @@ use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use RuntimeException;
+use Throwable;
 
 /**
  * PSR-18 client that answers from a queue and reads each request body while it is sent.
  *
  * A streamed upload closes its file once the request is sent, so the body has to be
  * consumed at send time to be inspected afterwards.
+ *
+ * An entry of the queue that is a Throwable is thrown instead of returned, which simulates
+ * a request that failed before a response arrived.
  */
 final class RecordingClient implements ClientInterface
 {
@@ -23,12 +27,12 @@ final class RecordingClient implements ClientInterface
     /** @var list<string> */
     public array $bodies = [];
 
-    /** @var list<ResponseInterface> */
-    private array $responses;
+    /** @var list<ResponseInterface|Throwable> */
+    private array $outcomes;
 
-    public function __construct(ResponseInterface ...$responses)
+    public function __construct(ResponseInterface|Throwable ...$outcomes)
     {
-        $this->responses = array_values($responses);
+        $this->outcomes = array_values($outcomes);
     }
 
     public function sendRequest(RequestInterface $request): ResponseInterface
@@ -36,7 +40,9 @@ final class RecordingClient implements ClientInterface
         $this->requests[] = $request;
         $this->bodies[] = (string) $request->getBody();
 
-        return array_shift($this->responses) ?? throw new RuntimeException('No response queued.');
+        $outcome = array_shift($this->outcomes) ?? throw new RuntimeException('No response queued.');
+
+        return $outcome instanceof Throwable ? throw $outcome : $outcome;
     }
 
     public function lastBody(): string

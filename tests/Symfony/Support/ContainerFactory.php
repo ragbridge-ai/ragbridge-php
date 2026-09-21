@@ -22,10 +22,10 @@ final class ContainerFactory
      * `ragbridge.client` alias) and `test.consumer`.
      *
      * @param array<string, mixed> $config configuration under the `ragbridge` key
-     * @param MockResponse|null $response when set, registered as the response of the application's `http_client`
+     * @param MockResponse|list<MockResponse>|null $response when set, registered as the response, or the queue of responses, of the application's `http_client`
      * @param bool|null $useSymfonyHttpClient forces the HTTP client choice of the extension
      */
-    public static function build(array $config, ?MockResponse $response = null, ?bool $useSymfonyHttpClient = null): ContainerBuilder
+    public static function build(array $config, MockResponse|array|null $response = null, ?bool $useSymfonyHttpClient = null): ContainerBuilder
     {
         $container = new ContainerBuilder();
 

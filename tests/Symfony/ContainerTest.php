@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Ragbridge\Exception\ServerException;
 use Ragbridge\RagbridgeClient;
 use Ragbridge\Symfony\DependencyInjection\RagbridgeExtension;
 use Ragbridge\Symfony\RagbridgeBundle;
@@ -27,6 +28,19 @@ function authorizationOf(MockResponse $response): ?string
     $value = $headers['authorization'][0] ?? null;
 
     return is_string($value) ? $value : null;
+}
+
+/**
+ * The URL a mock response was requested with, or null when it was never used.
+ */
+function requestedUrl(MockResponse $response): ?string
+{
+    try {
+        return $response->getRequestUrl();
+    } catch (Error) {
+        // The property is not initialised until the response is used.
+        return null;
+    }
 }
 
 afterEach(function (): void {
@@ -161,4 +175,114 @@ it('reports an invalid base URL when the client is created', function (): void {
 
     expect(fn() => $container->get('test.client'))
         ->toThrow(InvalidArgumentException::class, 'The base URL must be an absolute http or https URL');
+});
+
+describe('retries', function (): void {
+    it('are off by default', function (): void {
+        $responses = [new MockResponse('{"detail":"unavailable"}', ['http_code' => 503]), new MockResponse('[]')];
+        $container = ContainerFactory::build(['base_url' => 'http://localhost:8000'], $responses);
+
+        $client = $container->get('test.client');
+        assert($client instanceof RagbridgeClient);
+
+        expect(fn() => $client->documents())->toThrow(ServerException::class)
+            ->and($responses[0]->getInfo('http_code'))->toBe(503)
+            ->and(requestedUrl($responses[1]))->toBeNull();
+    });
+
+    it('can be enabled in the configuration', function (): void {
+        $responses = [new MockResponse('', ['http_code' => 503]), new MockResponse('[]')];
+        $container = ContainerFactory::build(
+            ['base_url' => 'http://localhost:8000', 'retry' => ['enabled' => true, 'base_delay_ms' => 1, 'max_delay_ms' => 2]],
+            $responses,
+        );
+
+        $client = $container->get('test.client');
+        assert($client instanceof RagbridgeClient);
+
+        expect($client->documents())->toBe([])
+            ->and($responses[1]->getRequestUrl())->toBe('http://localhost:8000/documents');
+    });
+
+    it('apply the configured number of attempts', function (): void {
+        $responses = [new MockResponse('', ['http_code' => 503]), new MockResponse('', ['http_code' => 503]), new MockResponse('[]')];
+        $container = ContainerFactory::build(
+            ['base_url' => 'http://localhost:8000', 'retry' => ['enabled' => true, 'max_attempts' => 2, 'base_delay_ms' => 1, 'max_delay_ms' => 2]],
+            $responses,
+        );
+
+        $client = $container->get('test.client');
+        assert($client instanceof RagbridgeClient);
+
+        expect(fn() => $client->documents())->toThrow(ServerException::class)
+            ->and($responses[1]->getRequestUrl())->toBe('http://localhost:8000/documents')
+            ->and(requestedUrl($responses[2]))->toBeNull();
+    });
+
+    it('leave POST requests alone unless retry_post is set', function (bool $retryPost, bool $secondSent): void {
+        $responses = [new MockResponse('', ['http_code' => 503]), new MockResponse('{"answer":"x","sources":[]}')];
+        $container = ContainerFactory::build(
+            ['base_url' => 'http://localhost:8000', 'retry' => ['enabled' => true, 'retry_post' => $retryPost, 'base_delay_ms' => 1, 'max_delay_ms' => 2]],
+            $responses,
+        );
+
+        $client = $container->get('test.client');
+        assert($client instanceof RagbridgeClient);
+
+        try {
+            $client->query('Q');
+        } catch (ServerException) {
+        }
+
+        expect(requestedUrl($responses[1]) !== null)->toBe($secondSent);
+    })->with([
+        'off' => [false, false],
+        'on' => [true, true],
+    ]);
+
+    it('are available without the Symfony HTTP client', function (): void {
+        $http = new RecordingClient(Fixtures::response(503), Fixtures::jsonResponse(200, 'documents'));
+        FixedClientStrategy::install($http);
+
+        $container = ContainerFactory::build(
+            ['base_url' => 'http://localhost:8000', 'retry' => ['enabled' => true, 'base_delay_ms' => 1, 'max_delay_ms' => 2]],
+            null,
+            false,
+        );
+
+        $client = $container->get('test.client');
+        assert($client instanceof RagbridgeClient);
+
+        expect($client->documents())->toHaveCount(2)
+            ->and($http->requests)->toHaveCount(2);
+    });
+
+    it('read their settings from environment variables', function (): void {
+        $_ENV['RAGBRIDGE_RETRY_ATTEMPTS'] = '2';
+        $_ENV['RAGBRIDGE_RETRY_ON'] = '1';
+        $responses = [new MockResponse('', ['http_code' => 503]), new MockResponse('', ['http_code' => 503]), new MockResponse('[]')];
+        $container = ContainerFactory::build(
+            [
+                'base_url' => 'http://localhost:8000',
+                'retry' => [
+                    'enabled' => '%env(bool:RAGBRIDGE_RETRY_ON)%',
+                    'max_attempts' => '%env(int:RAGBRIDGE_RETRY_ATTEMPTS)%',
+                    'base_delay_ms' => 1,
+                    'max_delay_ms' => 2,
+                ],
+            ],
+            $responses,
+        );
+
+        $client = $container->get('test.client');
+        assert($client instanceof RagbridgeClient);
+
+        try {
+            expect(fn() => $client->documents())->toThrow(ServerException::class)
+                ->and($responses[1]->getRequestUrl())->toBe('http://localhost:8000/documents')
+                ->and(requestedUrl($responses[2]))->toBeNull();
+        } finally {
+            unset($_ENV['RAGBRIDGE_RETRY_ATTEMPTS'], $_ENV['RAGBRIDGE_RETRY_ON']);
+        }
+    });
 });

@@ -15,6 +15,12 @@ use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
  * ragbridge:
  *     base_url: '%env(RAGBRIDGE_BASE_URL)%'   # required
  *     api_key: '%env(RAGBRIDGE_API_KEY)%'     # optional
+ *     retry:                                  # optional, off by default
+ *         enabled: true
+ *         max_attempts: 3
+ *         base_delay_ms: 200
+ *         max_delay_ms: 10000
+ *         retry_post: false
  * ```
  */
 final class Configuration implements ConfigurationInterface
@@ -46,6 +52,31 @@ final class Configuration implements ConfigurationInterface
                         ->then(static function (): never {
                             throw new InvalidConfigurationException('The "ragbridge.api_key" option must be a string or null.');
                         })
+                    ->end()
+                ->end()
+                ->arrayNode('retry')
+                    ->info('Sends requests again that failed for a transient reason: a connection error, or HTTP 429, 502, 503 or 504. Off by default.')
+                    ->canBeEnabled()
+                    ->children()
+                        ->integerNode('max_attempts')
+                            ->info('Total number of tries, including the first.')
+                            ->defaultValue(3)
+                            ->min(1)
+                        ->end()
+                        ->integerNode('base_delay_ms')
+                            ->info('Pause before the first retry, in milliseconds. It doubles for each further retry.')
+                            ->defaultValue(200)
+                            ->min(0)
+                        ->end()
+                        ->integerNode('max_delay_ms')
+                            ->info('Longest pause between two tries, in milliseconds.')
+                            ->defaultValue(10000)
+                            ->min(0)
+                        ->end()
+                        ->booleanNode('retry_post')
+                            ->info('Also retry POST requests (query, search, agent and uploads). A POST whose response was lost may already have been processed by the service.')
+                            ->defaultFalse()
+                        ->end()
                     ->end()
                 ->end()
             ->end();

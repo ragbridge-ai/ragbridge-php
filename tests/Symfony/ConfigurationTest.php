@@ -16,14 +16,24 @@ function processedConfig(array $configs): array
     return (new Processor())->processConfiguration(new Configuration(), $configs);
 }
 
+/**
+ * The `retry` section of a configuration that does not mention it.
+ *
+ * @return array<string, mixed>
+ */
+function retryDefaults(): array
+{
+    return ['enabled' => false, 'max_attempts' => 3, 'base_delay_ms' => 200, 'max_delay_ms' => 10000, 'retry_post' => false];
+}
+
 it('accepts a configuration with only the base URL', function (): void {
     expect(processedConfig([['base_url' => 'http://localhost:8000']]))
-        ->toBe(['base_url' => 'http://localhost:8000', 'api_key' => null]);
+        ->toBe(['base_url' => 'http://localhost:8000', 'api_key' => null, 'retry' => retryDefaults()]);
 });
 
 it('accepts a configuration with an API key', function (): void {
     expect(processedConfig([['base_url' => 'https://rag.example.com', 'api_key' => 'secret-key']]))
-        ->toBe(['base_url' => 'https://rag.example.com', 'api_key' => 'secret-key']);
+        ->toBe(['base_url' => 'https://rag.example.com', 'api_key' => 'secret-key', 'retry' => retryDefaults()]);
 });
 
 it('accepts environment variable placeholders', function (): void {
@@ -39,7 +49,7 @@ it('lets a later configuration override an earlier one', function (): void {
         ['base_url' => 'https://prod.example.com'],
     ]);
 
-    expect($config)->toBe(['base_url' => 'https://prod.example.com', 'api_key' => 'base-key']);
+    expect($config)->toBe(['base_url' => 'https://prod.example.com', 'api_key' => 'base-key', 'retry' => retryDefaults()]);
 });
 
 it('requires the base URL', function (): void {
@@ -73,4 +83,57 @@ it('accepts an empty API key', function (): void {
 it('rejects unknown options', function (): void {
     expect(fn() => processedConfig([['base_url' => 'http://localhost:8000', 'timeout' => 30]]))
         ->toThrow(InvalidConfigurationException::class, 'Unrecognized option "timeout" under "ragbridge"');
+});
+
+describe('retry', function (): void {
+    it('is off unless it is enabled', function (): void {
+        expect(processedConfig([['base_url' => 'http://localhost:8000']])['retry'])->toBe(retryDefaults());
+    });
+
+    it('can be enabled with the defaults', function (): void {
+        $retry = processedConfig([['base_url' => 'http://localhost:8000', 'retry' => true]])['retry'];
+
+        expect($retry)->toBe([...retryDefaults(), 'enabled' => true]);
+    });
+
+    it('can be enabled with options', function (): void {
+        $retry = processedConfig([[
+            'base_url' => 'http://localhost:8000',
+            'retry' => ['enabled' => true, 'max_attempts' => 5, 'base_delay_ms' => 100, 'max_delay_ms' => 2000, 'retry_post' => true],
+        ]])['retry'];
+
+        expect($retry)->toBe(['enabled' => true, 'max_attempts' => 5, 'base_delay_ms' => 100, 'max_delay_ms' => 2000, 'retry_post' => true]);
+    });
+
+    it('can be switched off again by a later configuration', function (): void {
+        $config = processedConfig([
+            ['base_url' => 'http://localhost:8000', 'retry' => true],
+            ['retry' => ['enabled' => false]],
+        ]);
+
+        expect($config)->toHaveKey('retry.enabled', false);
+    });
+
+    it('rejects values out of range', function (string $option, int $value): void {
+        expect(fn() => processedConfig([['base_url' => 'http://localhost:8000', 'retry' => ['enabled' => true, $option => $value]]]))
+            ->toThrow(InvalidConfigurationException::class, $option);
+    })->with([
+        'no attempts' => ['max_attempts', 0],
+        'negative base delay' => ['base_delay_ms', -1],
+        'negative maximum delay' => ['max_delay_ms', -1],
+    ]);
+
+    it('rejects values of the wrong type', function (string $option, mixed $value): void {
+        expect(fn() => processedConfig([['base_url' => 'http://localhost:8000', 'retry' => ['enabled' => true, $option => $value]]]))
+            ->toThrow(InvalidConfigurationException::class, $option);
+    })->with([
+        'attempts as text' => ['max_attempts', 'many'],
+        'delay as array' => ['base_delay_ms', [1]],
+        'retry_post as text' => ['retry_post', 'sometimes'],
+    ]);
+
+    it('rejects unknown options', function (): void {
+        expect(fn() => processedConfig([['base_url' => 'http://localhost:8000', 'retry' => ['jitter' => false]]]))
+            ->toThrow(InvalidConfigurationException::class, 'Unrecognized option "jitter" under "ragbridge.retry"');
+    });
 });
