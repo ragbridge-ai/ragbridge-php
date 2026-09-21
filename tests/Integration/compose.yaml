@@ -8,6 +8,17 @@
 
 name: ragbridge-php-integration
 
+# The settings the service and its worker share.
+x-service-environment: &service-environment
+  ENVIRONMENT: development
+  DATABASE_URL: postgresql+psycopg://ragbridge:ragbridge@postgres:5432/ragbridge
+  REDIS_URL: redis://redis:6379/0
+  OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+  EMBEDDING_MODEL: ${EMBEDDING_MODEL:-ollama/nomic-embed-text}
+  EMBEDDING_DIMENSION: "768"
+  CHAT_MODEL: ${CHAT_MODEL:-ollama/llama3.2}
+  CHAT_TEMPERATURE: "0"
+
 services:
   postgres:
     image: pgvector/pgvector:pg17
@@ -43,15 +54,7 @@ services:
   app:
     build:
       context: https://github.com/ragbridge-ai/ragbridge.git#7ce2c532bf4439e2d3d82f99d94fd58bdfb6700b
-    environment:
-      ENVIRONMENT: development
-      DATABASE_URL: postgresql+psycopg://ragbridge:ragbridge@postgres:5432/ragbridge
-      REDIS_URL: redis://redis:6379/0
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-ollama/nomic-embed-text}
-      EMBEDDING_DIMENSION: "768"
-      CHAT_MODEL: ${CHAT_MODEL:-ollama/llama3.2}
-      CHAT_TEMPERATURE: "0"
+    environment: *service-environment
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -66,3 +69,18 @@ services:
       interval: 3s
       timeout: 5s
       retries: 40
+
+  # Processes the documents that are too large to be handled within the request, which the
+  # service answers with 202 and leaves pending until this worker has embedded them.
+  worker:
+    build:
+      context: https://github.com/ragbridge-ai/ragbridge.git#7ce2c532bf4439e2d3d82f99d94fd58bdfb6700b
+    command: ["arq", "ragbridge.worker.WorkerSettings"]
+    environment: *service-environment
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
