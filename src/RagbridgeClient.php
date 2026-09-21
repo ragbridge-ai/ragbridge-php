@@ -19,6 +19,7 @@ use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Http\Message\StreamInterface;
 use Ragbridge\Dto\AgentResult;
 use Ragbridge\Dto\Document;
+use Ragbridge\Dto\DocumentStatus;
 use Ragbridge\Dto\HealthStatus;
 use Ragbridge\Dto\QueryResult;
 use Ragbridge\Dto\SearchResult;
@@ -28,6 +29,7 @@ use Ragbridge\Exception\AuthenticationException;
 use Ragbridge\Exception\ConflictException;
 use Ragbridge\Exception\InvalidResponseException;
 use Ragbridge\Exception\NotFoundException;
+use Ragbridge\Exception\ProcessingTimeoutException;
 use Ragbridge\Exception\RequestFailedException;
 use Ragbridge\Exception\ServerException;
 use Ragbridge\Exception\ServiceUnavailableException;
@@ -255,6 +257,52 @@ class RagbridgeClient
     }
 
     /**
+     * Waits until the service has finished processing a document, and returns it as it is then.
+     *
+     * A document is pending or processing while the service works on it in the background,
+     * which it does for a large upload and for large text saved with
+     * {@see putDocument()}. The document is fetched again, at the interval, until it is ready
+     * or failed. A failed document is returned, not thrown: check its status and its error.
+     * For a document saved by its external id, sending the same record again retries it.
+     *
+     * The waiting time is counted from the pauses, so the time spent on the requests comes on
+     * top of it. The pauses go through the same function as those of the retries.
+     *
+     * @param int $timeoutSeconds how long to wait at most; with 0 a document that is still being
+     *                            processed is reported at once, without fetching it again
+     * @param int $intervalMs pause between two checks, in milliseconds
+     *
+     * @throws ProcessingTimeoutException when the document is still being processed after the timeout
+     * @throws NotFoundException when the document is deleted while it is waited for
+     * @throws InvalidArgumentException when the timeout is negative or the interval is below 1 ms
+     * @throws Exception\RagbridgeException
+     */
+    public function waitUntilProcessed(Document $document, int $timeoutSeconds = 60, int $intervalMs = 1000): Document
+    {
+        if ($timeoutSeconds < 0 || $intervalMs < 1) {
+            throw new InvalidArgumentException(sprintf(
+                'The timeout cannot be negative and the interval must be at least 1 ms, %d s and %d ms given.',
+                $timeoutSeconds,
+                $intervalMs,
+            ));
+        }
+
+        $waitedMs = 0;
+
+        while (in_array($document->status, [DocumentStatus::Pending, DocumentStatus::Processing], true)) {
+            if ($waitedMs >= $timeoutSeconds * 1000) {
+                throw new ProcessingTimeoutException($document, $timeoutSeconds);
+            }
+
+            ($this->sleep)($intervalMs);
+            $waitedMs += $intervalMs;
+            $document = $this->document($document->id);
+        }
+
+        return $document;
+    }
+
+    /**
      * Lists the documents stored in the service.
      *
      * @return list<Document>
@@ -303,9 +351,9 @@ class RagbridgeClient
      * sent is removed from the document.
      *
      * Large text is processed by a worker after the response. The result is then queued
-     * ({@see SyncedDocument::isQueued()}) and the document is pending: poll
-     * {@see getByExternalId()} until its status is ready or failed. Send the same record
-     * again to retry a document whose processing failed.
+     * ({@see SyncedDocument::isQueued()}) and the document is pending: use
+     * {@see waitUntilProcessed()} to wait for it. Send the same record again to retry a
+     * document whose processing failed.
      *
      * A record older than the stored one is ignored ({@see SyncResult::Stale}) when both
      * carry a time. Queues deliver out of order, so send the time the record was last

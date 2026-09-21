@@ -522,7 +522,7 @@ describe('documents identified by an external id', function (): void {
                 ->and($created->result)->toBe(SyncResult::Created)
                 ->and($created->document->status)->toBe(DocumentStatus::Pending);
 
-            $document = Integration::waitUntilProcessed($client, $created->document);
+            $document = $client->waitUntilProcessed($created->document, 90);
 
             // The error first, so that a failure says what the service reported.
             expect($document->error)->toBeNull()
@@ -543,7 +543,7 @@ describe('documents identified by an external id', function (): void {
                 ->and($replaced->isQueued())->toBeTrue()
                 ->and($replaced->document->id)->toBe($created->document->id);
 
-            expect(Integration::waitUntilProcessed($client, $replaced->document)->status)->toBe(DocumentStatus::Ready);
+            expect($client->waitUntilProcessed($replaced->document, 90)->status)->toBe(DocumentStatus::Ready);
         } finally {
             $client->deleteByExternalId($id);
         }

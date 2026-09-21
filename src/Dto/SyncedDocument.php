@@ -53,8 +53,9 @@ final readonly class SyncedDocument
 
     /**
      * Whether the text was too large to process within the request. The document is then
-     * pending and becomes ready, or failed, later. For a replaced document, the old version
-     * stays searchable until then.
+     * pending and becomes ready, or failed, later. Wait for it with
+     * {@see \Ragbridge\RagbridgeClient::waitUntilProcessed()}. For a replaced document, the old
+     * version stays searchable until then.
      */
     public function isQueued(): bool
     {
