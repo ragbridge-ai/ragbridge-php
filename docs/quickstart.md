@@ -140,8 +140,8 @@ Route::get('/ask', function (Request $request) {
 Open `/ask?q=How many days of leave do employees get?`. Upload documents with
 `Ragbridge::upload($path)`, for example from an Artisan command or a controller that receives
 a file. To type-hint the client instead of using the facade, inject
-`Ragbridge\RagbridgeClient`. See the [README](../README.md#laravel) for publishing the
-configuration and testing.
+`Ragbridge\RagbridgeClient`. See the [Laravel guide](laravel.md) for publishing the
+configuration, setting a timeout and testing.
 
 ## 5. Symfony
 
@@ -205,7 +205,7 @@ final class AskController extends AbstractController
 
 Open `/ask?q=How many days of leave do employees get?`. Requests go through your
 application's `http_client` service, so timeouts and the profiler work as usual. See the
-[README](../README.md#symfony) for details.
+[Symfony guide](symfony.md) for details.
 
 ## Troubleshooting
 
@@ -216,4 +216,4 @@ application's `http_client` service, so timeouts and the profiler work as usual.
 | `TransportException` | The service is not reachable at the base URL. Check that it is running and that the URL, including the port, is right. |
 | `RequestFailedException` with status 415 | The file type is not supported. Use plain text, Markdown or PDF. |
 | The document stays `pending` | Large files are processed by the service's background worker. Check that the worker is running (`docker compose ps`). |
-| Answers take a long time | A local model on a machine without a GPU is slow. Give your HTTP client a longer timeout, see the README for Laravel and Symfony. |
+| Answers take a long time | A local model on a machine without a GPU is slow. Give your HTTP client a longer timeout, see the [Laravel](laravel.md) and [Symfony](symfony.md) guides. |

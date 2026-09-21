@@ -1,36 +1,35 @@
 # ragbridge/php
 
 [![CI](https://github.com/ragbridge-ai/ragbridge-php/actions/workflows/ci.yml/badge.svg)](https://github.com/ragbridge-ai/ragbridge-php/actions/workflows/ci.yml)
+[![Latest version](https://img.shields.io/packagist/v/ragbridge/php)](https://packagist.org/packages/ragbridge/php)
+[![PHP version](https://img.shields.io/packagist/php-v/ragbridge/php)](https://packagist.org/packages/ragbridge/php)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-PHP client for the ragbridge retrieval-augmented generation service.
+PHP client for [ragbridge](https://github.com/ragbridge-ai/ragbridge), a self-hosted
+retrieval-augmented generation (RAG) service. Upload documents, ask questions in natural
+language and get answers together with the sources they came from, from plain PHP, Laravel
+or Symfony.
 
-ragbridge is a self-hosted service that exposes retrieval-augmented generation over an
-HTTP API: you upload documents, then ask questions and receive answers together with the
-sources they were drawn from. This package lets PHP applications use that API with a few
-lines of code, from plain PHP, Laravel or Symfony.
+The package is a small, typed client for the service's HTTP API. Retrieval, embedding and
+generation all happen in the service.
 
-All retrieval, embedding and generation logic lives in the service. This package handles
-transport, typed responses, error handling and framework integration only.
+## Features
 
-## Status
-
-Stable. The package follows [semantic versioning](https://semver.org/spec/v2.0.0.html); the
-part of it that the version number covers is defined in
-[Public API and versioning](#public-api-and-versioning). See the [changelog](CHANGELOG.md)
-for what changed, and the [roadmap](docs/roadmap.md) for what is planned.
-
-New to ragbridge? The [quick start](docs/quickstart.md) goes from starting the service to a
-first answer, in plain PHP, Laravel and Symfony. A small [example application](examples/) is
-included.
+- Upload PDF, Markdown and plain-text documents, streamed from disk, and list, fetch and
+  delete them
+- Ask questions and get an answer with its sources; choose the retrieval mode and the number
+  of chunks, and optionally see why each chunk was found
+- Typed, immutable response objects instead of arrays
+- One exception hierarchy for authentication, validation, transport and server errors
+- Works with any PSR-18 HTTP client, with no hard dependency on Guzzle
+- Laravel service provider, configuration and facade, and a Symfony bundle
 
 ## Requirements
 
 - PHP 8.2 or later
-- A running ragbridge service
-- A PSR-18 HTTP client and PSR-17 factories, for example Guzzle, Symfony HttpClient or
-  `nyholm/psr7` (most applications already have one; see
-  [ADR 0002](docs/adr/0002-psr18-http-client.md))
+- A running ragbridge service and an API key for it (see the [quick start](docs/quickstart.md))
+- A PSR-18 HTTP client and PSR-17 factories, for example Guzzle or Symfony HttpClient with
+  `nyholm/psr7`. Laravel already includes one.
 
 ## Installation
 
@@ -38,345 +37,41 @@ included.
 composer require ragbridge/php
 ```
 
-The client sends requests through a PSR-18 HTTP client that must be installed separately,
-for example `composer require guzzlehttp/guzzle`. Laravel already includes one. See
-[Requirements](#requirements).
-
-## Usage
-
-### Create a client
-
-```php
-use Ragbridge\RagbridgeClient;
-
-$client = RagbridgeClient::create('http://localhost:8000', getenv('RAGBRIDGE_API_KEY') ?: null);
-```
-
-`create()` finds the PSR-18 client and PSR-17 factories that are installed. The API key is
-sent as a bearer token; pass `null` if your service does not require one.
-
-To use an HTTP client you have already configured, for example to set timeouts, pass it to
-the constructor:
-
-```php
-use GuzzleHttp\Client;
-use GuzzleHttp\Psr7\HttpFactory;
-use Ragbridge\RagbridgeClient;
-
-$factory = new HttpFactory(); // implements both request and stream factories
-
-$client = new RagbridgeClient(
-    new Client(['timeout' => 30]),
-    $factory,
-    $factory,
-    'http://localhost:8000',
-    'your-api-key',
-);
-```
-
-### Upload a document
-
-```php
-use Ragbridge\Dto\DocumentStatus;
-
-$document = $client->upload('/path/to/handbook.pdf');
-
-// Large files are processed asynchronously. Wait until the document is usable.
-while (in_array($document->status, [DocumentStatus::Pending, DocumentStatus::Processing], true)) {
-    sleep(1);
-    $document = $client->document($document->id);
-}
-
-if ($document->status === DocumentStatus::Failed) {
-    echo "Processing failed: {$document->error}\n";
-}
-```
-
-The file is streamed from disk and is never loaded into memory. The service accepts plain
-text, Markdown and PDF files. The content type is derived from the file extension, or you
-can pass it explicitly:
-
-```php
-$client->upload($path, filename: 'policy.md', contentType: 'text/markdown');
-```
-
-To upload from a stream, for example a file received in a request, use `uploadStream()`:
-
-```php
-$client->uploadStream($psr7Stream, 'notes.txt');
-```
-
-### Ask a question
-
-```php
-$result = $client->query('How many days of leave do employees get?');
-
-echo $result->answer, "\n";
-
-foreach ($result->sources as $source) {
-    printf("%s (chunk %d, score %.2f)\n", $source->filename, $source->chunkIndex, $source->score);
-    echo $source->snippet, "\n";
-}
-```
-
-The number of retrieved chunks, the retrieval strategy and the retrieval details can be
-set per call:
-
-```php
-use Ragbridge\SearchMode;
-
-$result = $client->query(
-    'Who approves travel expenses?',
-    topK: 10,
-    mode: SearchMode::Hybrid,
-    explain: true,
-);
-
-foreach ($result->sources as $source) {
-    // Populated when explain is true.
-    echo $source->retrieval?->vectorRank, ' ', $source->retrieval?->keywordRank, "\n";
-}
-```
-
-### List and delete documents
-
-```php
-foreach ($client->documents() as $document) {
-    echo "{$document->id}  {$document->filename}  {$document->status->value}\n";
-}
-
-$client->deleteDocument($document->id);
-```
-
-### Handle errors
-
-Every failed call throws an exception that implements `Ragbridge\Exception\RagbridgeException`,
-so you can catch them all in one place or handle specific cases:
-
-```php
-use Ragbridge\Exception\AuthenticationException;
-use Ragbridge\Exception\NotFoundException;
-use Ragbridge\Exception\RagbridgeException;
-use Ragbridge\Exception\ValidationException;
-
-try {
-    $result = $client->query($question, topK: 50);
-} catch (ValidationException $e) {
-    foreach ($e->errors() as $error) {
-        echo implode('.', $error['loc']), ': ', $error['msg'], "\n";
-    }
-} catch (AuthenticationException) {
-    echo "Check the API key.\n";
-} catch (RagbridgeException $e) {
-    echo $e->getMessage(), "\n";
-}
-```
-
-| Exception                    | Cause                                                             |
-| ---------------------------- | ----------------------------------------------------------------- |
-| `AuthenticationException`    | HTTP 401 or 403                                                   |
-| `NotFoundException`          | HTTP 404                                                          |
-| `ValidationException`        | HTTP 422; `errors()` lists the invalid fields                     |
-| `ServerException`            | HTTP 5xx                                                          |
-| `RequestFailedException`     | Any other error status, for example 413, 415 or 429               |
-| `TransportException`         | The service could not be reached or the request timed out         |
-| `InvalidResponseException`   | The response is not valid JSON or does not match the API schema   |
-
-The exceptions for HTTP errors extend `ApiException`, which provides `statusCode()` and
-`body()` (the decoded response body). Invalid arguments, such as a malformed base URL or a
-file that does not exist, raise `InvalidArgumentException`.
-
-### Response objects
-
-Responses are immutable objects with typed properties (`Document`, `QueryResult`,
-`Source`, `RetrievalInfo`) rather than arrays. See
-[ADR 0004](docs/adr/0004-typed-response-objects.md) for the reasoning.
-
-## Framework integrations
-
-The core client works anywhere. The Laravel and Symfony integrations add configuration and
-service registration on top of it. They are independent: each works without the other
-framework installed, and the core never depends on either
-([ADR 0003](docs/adr/0003-framework-independent-core.md),
-[ADR 0005](docs/adr/0005-integrations-in-one-package.md)).
-
-### Laravel
-
-Supported: Laravel 12 and 13. The service provider and the `Ragbridge` alias are
-discovered automatically, so installing the package is enough. Set the connection in
-`.env`:
-
-```dotenv
-RAGBRIDGE_BASE_URL=http://localhost:8000
-RAGBRIDGE_API_KEY=your-api-key
-```
-
-`RAGBRIDGE_API_KEY` can be left out for a service that does not require one. To change the
-configuration file, publish it:
-
-```bash
-php artisan vendor:publish --tag=ragbridge-config
-```
-
-The client is a singleton in the container. Type-hint it, or use the facade:
-
-```php
-use Illuminate\Http\Request;
-use Ragbridge\Laravel\Facades\Ragbridge;
-use Ragbridge\RagbridgeClient;
-
-// Dependency injection
-final class AskController
-{
-    public function __invoke(Request $request, RagbridgeClient $ragbridge): string
-    {
-        return $ragbridge->query($request->string('question')->toString())->answer;
-    }
-}
-
-// Facade
-$result = Ragbridge::query('How many days of leave do employees get?');
-```
-
-The client sends requests through the PSR-18 client that discovery finds, which is Guzzle in
-a standard Laravel application. Guzzle has no timeout by default. To set one, bind the client
-yourself in a service provider:
-
-```php
-use GuzzleHttp\Client;
-use GuzzleHttp\Psr7\HttpFactory;
-use Ragbridge\RagbridgeClient;
-
-$this->app->singleton(RagbridgeClient::class, function () {
-    $factory = new HttpFactory();
-
-    return new RagbridgeClient(
-        new Client(['timeout' => 30]),
-        $factory,
-        $factory,
-        config('ragbridge.base_url'),
-        config('ragbridge.api_key'),
-    );
-});
-```
-
-In tests, replace the facade with a mock:
-
-```php
-use Ragbridge\Dto\QueryResult;
-use Ragbridge\Laravel\Facades\Ragbridge;
-
-Ragbridge::shouldReceive('query')
-    ->once()
-    ->with('How many days of leave do employees get?')
-    ->andReturn(new QueryResult('25 days.', []));
-```
-
-### Symfony
-
-Supported: Symfony 6.4, 7 and 8. Install the package together with the HTTP client and a PSR-17
-implementation:
-
-```bash
-composer require ragbridge/php symfony/http-client nyholm/psr7
-```
-
-Register the bundle in `config/bundles.php`:
-
-```php
-return [
-    // ...
-    Ragbridge\Symfony\RagbridgeBundle::class => ['all' => true],
-];
-```
-
-Configure it in `config/packages/ragbridge.yaml`:
-
-```yaml
-ragbridge:
-    base_url: '%env(RAGBRIDGE_BASE_URL)%'    # required
-    api_key: '%env(default::RAGBRIDGE_API_KEY)%'    # optional
-```
-
-```dotenv
-RAGBRIDGE_BASE_URL=http://localhost:8000
-RAGBRIDGE_API_KEY=your-api-key
-```
-
-The client is registered for autowiring, and as the `ragbridge.client` service alias:
-
-```php
-use Ragbridge\RagbridgeClient;
-
-final class AskController
-{
-    public function __construct(private RagbridgeClient $ragbridge) {}
-
-    public function __invoke(Request $request): Response
-    {
-        $result = $this->ragbridge->query((string) $request->query->get('question'));
-
-        return new Response($result->answer);
-    }
-}
-```
-
-Requests are sent through the application's `http_client` service, so its options, such as
-timeouts, and the profiler apply. Set them under `framework.http_client`. Without
-`symfony/http-client` the bundle falls back to whatever PSR-18 client discovery finds.
-
-## Public API and versioning
-
-From 1.0 the package follows semantic versioning. The following is the public API. Breaking
-changes to it happen only in a major release.
-
-- **Client:** `Ragbridge\RagbridgeClient` (its constructor, `create()`, `query()`,
-  `upload()`, `uploadStream()`, `documents()`, `document()` and `deleteDocument()`) and the
-  `Ragbridge\SearchMode` enum.
-- **Response objects:** the classes in `Ragbridge\Dto` (`Document`, `DocumentStatus`,
-  `QueryResult`, `Source` and `RetrievalInfo`), their public properties and their
-  `fromArray()` factories.
-- **Exceptions:** the classes and the interface in `Ragbridge\Exception`, including
-  `statusCode()`, `body()` and `errors()`.
-- **Laravel:** `Ragbridge\Laravel\RagbridgeServiceProvider`, the
-  `Ragbridge\Laravel\Facades\Ragbridge` facade, the `ragbridge` configuration keys and their
-  environment variables, and the `Ragbridge\RagbridgeClient` and `ragbridge` container bindings.
-- **Symfony:** `Ragbridge\Symfony\RagbridgeBundle`, the `ragbridge` configuration keys, the
-  `Ragbridge\RagbridgeClient` service and its `ragbridge.client` alias, and the
-  `ragbridge.base_url` and `ragbridge.api_key` parameters.
-
-New features are added in minor releases. This can include new methods, new optional
-constructor parameters, new properties on response objects, new cases in `DocumentStatus`
-and `SearchMode`, and new exception classes that extend an existing one. Code that matches
-on those enums should therefore have a default branch, and code that catches an exception
-class keeps working.
-
-**Not covered:**
-
-- Classes and members marked `@internal`. These are `Ragbridge\Internal\Payload`,
-  `Ragbridge\Internal\ConcatStream`, `Ragbridge\Internal\MultipartFile` and the constructor
-  parameter of `Ragbridge\Symfony\DependencyInjection\RagbridgeExtension`.
-- Private and protected members, and the wording of exception messages.
-- The test helpers in `tests/`, and the examples, which are not part of the package.
-
-The minimum PHP version and the supported framework versions change only in a major
-release, except that support for a framework version that has reached end of life may be
-dropped in a minor release. Response objects follow the service's API: when the service
-adds a field, the package models it in a new release
-([ADR 0004](docs/adr/0004-typed-response-objects.md)).
+If your project has no HTTP client yet, install one as well, for example
+`composer require guzzlehttp/guzzle`. The package finds the client that is installed. For
+Laravel and Symfony, follow the framework guides below.
 
 ## Documentation
 
-- [Quick start](docs/quickstart.md)
-- [Example application](examples/)
-- [Roadmap](docs/roadmap.md)
-- [Architecture decision records](docs/adr/)
-- [Changelog](CHANGELOG.md)
+| Guide | What it covers |
+| ----- | -------------- |
+| [Quick start](docs/quickstart.md) | From starting the service to a first answer, in plain PHP, Laravel and Symfony |
+| [Usage](docs/usage.md) | Creating a client, uploading documents, asking questions and handling errors |
+| [Laravel](docs/laravel.md) | Installation, configuration, facade and testing |
+| [Symfony](docs/symfony.md) | Bundle setup, configuration and the HTTP client |
+| [Example application](examples/) | A small upload-and-ask app to run and read |
+| [Versioning](docs/versioning.md) | The public API that semantic versioning covers |
+| [Roadmap](docs/roadmap.md), [Changelog](CHANGELOG.md), [Decisions](docs/adr/) | Where the project is going, what changed, and why |
+
+## Supported versions
+
+| Component | Versions |
+| --------- | -------- |
+| PHP | 8.2, 8.3, 8.4 |
+| Laravel | 12, 13 |
+| Symfony | 6.4, 7, 8 |
+
+All of them are tested in CI on every change.
+
+## Versioning
+
+The package follows [semantic versioning](https://semver.org/spec/v2.0.0.html). What counts
+as public API is defined in [docs/versioning.md](docs/versioning.md).
 
 ## Contributing
 
-Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first. To report
-a security issue, follow [SECURITY.md](SECURITY.md).
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first. To report a
+security issue, follow [SECURITY.md](SECURITY.md).
 
 ## License
 
