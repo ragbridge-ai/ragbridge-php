@@ -7,6 +7,9 @@
          failOnRisky="true"
          failOnWarning="true">
     <testsuites>
+        <testsuite name="Laravel">
+            <directory>tests/Laravel</directory>
+        </testsuite>
         <testsuite name="Unit">
             <directory>tests/Unit</directory>
         </testsuite>

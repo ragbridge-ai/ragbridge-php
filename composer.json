@@ -34,10 +34,14 @@
     "require-dev": {
         "laravel/pint": "^1.30",
         "nyholm/psr7": "^1.8",
+        "orchestra/testbench": "^9.0||^10.0",
         "pestphp/pest": "^3.8",
         "php-http/mock-client": "^1.6",
         "phpstan/phpstan": "^2.2",
         "phpstan/phpstan-strict-rules": "^2.0"
+    },
+    "suggest": {
+        "illuminate/support": "Required to use the Laravel integration (^11.0 or ^12.0)"
     },
     "scripts": {
         "stan": "phpstan analyse --memory-limit=1G",
@@ -48,5 +52,12 @@
             "@test"
         ],
         "test": "pest"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Ragbridge\\Laravel\\RagbridgeServiceProvider"
+            ]
+        }
     }
 }
