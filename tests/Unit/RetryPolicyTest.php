@@ -94,7 +94,15 @@ describe('delay', function (): void {
     it('does not overflow for a very large number of attempts', function (): void {
         $policy = new RetryPolicy(maxAttempts: PHP_INT_MAX, baseDelayMs: 1, maxDelayMs: PHP_INT_MAX);
 
-        expect($policy->delayMs(200))->toBeInt()->toBeGreaterThanOrEqual(0);
+        foreach ([1, 62, 63, 64, 65, 200] as $attempt) {
+            expect($policy->delayMs($attempt))->toBeInt()->toBeGreaterThanOrEqual(0)->toBeLessThanOrEqual(PHP_INT_MAX);
+        }
+    });
+
+    it('stays at the maximum delay when doubling would pass it', function (): void {
+        $policy = new RetryPolicy(maxAttempts: 100, baseDelayMs: PHP_INT_MAX - 1, maxDelayMs: PHP_INT_MAX);
+
+        expect($policy->delayMs(5))->toBeInt()->toBeGreaterThanOrEqual(intdiv(PHP_INT_MAX, 2));
     });
 
     it('does not wait when the base delay is zero', function (): void {

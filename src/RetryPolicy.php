@@ -95,11 +95,12 @@ final readonly class RetryPolicy
             return $retryAfterMs <= $this->maxDelayMs ? $retryAfterMs : null;
         }
 
-        // Doubling step by step stops at the maximum, so the value cannot overflow.
+        // Doubling step by step stops at the maximum. The comparison is made before doubling,
+        // so the arithmetic stays in integers and cannot overflow into a float.
         $ceiling = $this->baseDelayMs;
 
         for ($try = 1; $try < $failedAttempt && $ceiling < $this->maxDelayMs; $try++) {
-            $ceiling = min($this->maxDelayMs, $ceiling * 2);
+            $ceiling = $ceiling > intdiv($this->maxDelayMs, 2) ? $this->maxDelayMs : $ceiling * 2;
         }
 
         $fixed = intdiv($ceiling, 2);
