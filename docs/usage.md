@@ -248,8 +248,9 @@ is case-sensitive and unique per tenant. A slash is not allowed. The client enco
 for you (`article:42` is sent as `article%3A42`). It refuses an empty id, an id with a slash
 and `.` or `..` before sending anything and raises an `InvalidArgumentException`. The service
 does not answer those with a validation error: an encoded slash (`%2F`) is decoded before the
-request is routed, so it gets a **404**, not a 422, and an empty id is not routed at all.
-`.` and `..` are removed from a path by HTTP clients. For every other id the service decides,
+request is routed, so it gets a **404**, not a 422. An empty id is redirected with a 307 to a
+path that means something else: a client that follows redirects sees a 422 about a UUID on GET
+and DELETE, and a 405 on PUT. `.` and `..` are removed from a path by HTTP clients. For every other id the service decides,
 and answers with a `ValidationException` (HTTP 422) that names the id.
 
 ### Metadata
@@ -288,6 +289,12 @@ seen; the service keeps working on it. It also works for large uploads.
 
 When the text of an existing document is replaced, the old version stays searchable until
 the new one is ready, and stays if the new one fails.
+
+A model that runs on the same machine can fail when it is given several large texts at the
+same time. The document is then `failed`, and its `error` holds the error of the model.
+Service 1.3.0 limits how many documents a worker embeds at once (the setting
+`WORKER_MAX_JOBS`, 2 by default), which makes this rare. Send the same record again to retry
+a document that failed.
 
 ### When to send the request again
 

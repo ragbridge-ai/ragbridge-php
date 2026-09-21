@@ -482,8 +482,8 @@ class RagbridgeClient
      * The path of a document by its external id, with the id encoded.
      *
      * Only what cannot be sent to the service as a path is refused here; the service decides
-     * which other ids are valid, and answers with a validation error. An empty id is not
-     * routed (the service redirects to another path), an encoded slash is turned into a slash
+     * which other ids are valid, and answers with a validation error. An empty id is redirected
+     * to a path that means something else and gets a misleading error, an encoded slash is turned into a slash
      * before the service routes the request and is answered with 404, not 422, and HTTP
      * clients remove the segments "." and ".." from a path.
      *
