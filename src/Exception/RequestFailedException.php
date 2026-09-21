@@ -6,6 +6,7 @@ namespace Ragbridge\Exception;
 
 /**
  * The service answered with a status that has no dedicated exception, for example 400,
- * 409, 413 or 429, or with an unexpected redirect.
+ * 413 or 429, or with an unexpected redirect. A 409 is reported as the subclass
+ * {@see ConflictException}.
  */
-final class RequestFailedException extends ApiException {}
+class RequestFailedException extends ApiException {}

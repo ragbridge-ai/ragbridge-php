@@ -23,10 +23,12 @@ use Ragbridge\Dto\QueryResult;
 use Ragbridge\Dto\SearchResult;
 use Ragbridge\Exception\ApiException;
 use Ragbridge\Exception\AuthenticationException;
+use Ragbridge\Exception\ConflictException;
 use Ragbridge\Exception\InvalidResponseException;
 use Ragbridge\Exception\NotFoundException;
 use Ragbridge\Exception\RequestFailedException;
 use Ragbridge\Exception\ServerException;
+use Ragbridge\Exception\ServiceUnavailableException;
 use Ragbridge\Exception\TransportException;
 use Ragbridge\Exception\ValidationException;
 use Ragbridge\Internal\MultipartFile;
@@ -516,7 +518,9 @@ class RagbridgeClient
         return match (true) {
             $status === 401, $status === 403 => AuthenticationException::fromResponse($status, $body),
             $status === 404 => NotFoundException::fromResponse($status, $body),
+            $status === 409 => ConflictException::fromResponse($status, $body),
             $status === 422 => ValidationException::fromResponse($status, $body),
+            $status === 503 => ServiceUnavailableException::fromResponse($status, $body),
             $status >= 500 => ServerException::fromResponse($status, $body),
             default => RequestFailedException::fromResponse($status, $body),
         };

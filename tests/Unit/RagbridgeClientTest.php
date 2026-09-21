@@ -6,11 +6,13 @@ use Http\Client\Exception\NetworkException;
 use Http\Mock\Client as MockClient;
 use Ragbridge\Exception\ApiException;
 use Ragbridge\Exception\AuthenticationException;
+use Ragbridge\Exception\ConflictException;
 use Ragbridge\Exception\InvalidResponseException;
 use Ragbridge\Exception\NotFoundException;
 use Ragbridge\Exception\RagbridgeException;
 use Ragbridge\Exception\RequestFailedException;
 use Ragbridge\Exception\ServerException;
+use Ragbridge\Exception\ServiceUnavailableException;
 use Ragbridge\Exception\TransportException;
 use Ragbridge\Exception\ValidationException;
 use Ragbridge\RagbridgeClient;
@@ -132,9 +134,45 @@ describe('error responses', function (): void {
         '422' => [422, ValidationException::class],
         '500' => [500, ServerException::class],
         '503' => [503, ServerException::class],
+        '409' => [409, RequestFailedException::class],
         '400' => [400, RequestFailedException::class],
         '429' => [429, RequestFailedException::class],
         '302' => [302, RequestFailedException::class],
+    ]);
+
+    it('reports a conflict as a ConflictException, which is a RequestFailedException', function (): void {
+        [$client] = ClientFactory::answering(Fixtures::response(409, '{"detail": "try again"}'));
+
+        $e = Thrown::by(fn() => $client->query('Q'), ConflictException::class);
+
+        expect($e)->toBeInstanceOf(RequestFailedException::class)
+            ->and($e->statusCode())->toBe(409);
+    });
+
+    it('reports an unavailable service as a ServiceUnavailableException, which is a ServerException', function (): void {
+        [$client] = ClientFactory::answering(Fixtures::response(503, '{"detail": "queue unavailable"}'));
+
+        $e = Thrown::by(fn() => $client->query('Q'), ServiceUnavailableException::class);
+
+        expect($e)->toBeInstanceOf(ServerException::class)
+            ->and($e->statusCode())->toBe(503);
+    });
+
+    it('does not report other statuses as the specific exceptions', function (int $status): void {
+        [$client] = ClientFactory::answering(Fixtures::response($status, '{"detail": "nope"}'));
+
+        $e = Thrown::by(fn() => $client->query('Q'), Ragbridge\Exception\ApiException::class);
+
+        expect($e)->not->toBeInstanceOf(ConflictException::class)
+            ->and($e)->not->toBeInstanceOf(ServiceUnavailableException::class);
+    })->with([
+        '400' => [400],
+        '404' => [404],
+        '422' => [422],
+        '429' => [429],
+        '500' => [500],
+        '502' => [502],
+        '504' => [504],
     ]);
 
     it('exposes the status code and body of an authentication failure', function (): void {
