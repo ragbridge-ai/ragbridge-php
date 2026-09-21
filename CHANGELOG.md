@@ -17,7 +17,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Contributing guide, security policy, code of conduct and pull request template.
 - `RagbridgeClient` for the ragbridge HTTP API, built with `RagbridgeClient::create()` from
   the installed PSR-18 client and PSR-17 factories, or with the constructor and any
-  PSR-18 client. Supports an optional API key sent as a bearer token.
+  PSR-18 client. Supports an optional API key sent as a bearer token; an empty key means no
+  key. The client is not final so that applications can replace it with a test double.
 - `query()` with `topK`, `SearchMode` and an `explain` option that adds retrieval details
   to each source.
 - `upload()`, `uploadStream()`, `documents()`, `document()` and `deleteDocument()`. Uploads
@@ -28,3 +29,10 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `InvalidResponseException`, `AuthenticationException`, `NotFoundException`,
   `ValidationException` (with `errors()`), `ServerException` and `RequestFailedException`.
 - README usage guide and ADR 0004 on typed response objects.
+- Laravel integration: `RagbridgeServiceProvider` with publishable `config/ragbridge.php`
+  (`RAGBRIDGE_BASE_URL`, `RAGBRIDGE_API_KEY`) and package auto-discovery, and the
+  `Ragbridge` facade.
+- Symfony integration: `RagbridgeBundle` with a `ragbridge` configuration (`base_url`,
+  `api_key`) that registers an autowirable `RagbridgeClient`, using the application's
+  `http_client` through `Psr18Client` when `symfony/http-client` is installed.
+- README sections for both integrations and ADR 0005 on keeping them in this package.

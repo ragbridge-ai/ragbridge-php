@@ -249,3 +249,14 @@ describe('construction', function (): void {
             ->toBeInstanceOf(RagbridgeClient::class);
     });
 });
+
+describe('API key', function (): void {
+    it('treats an empty API key as no key', function (): void {
+        $http = new MockClient();
+        $http->addResponse(Fixtures::jsonResponse(200, 'query_response'));
+
+        ClientFactory::make($http, apiKey: '')->query('Q');
+
+        expect(ClientFactory::lastRequest($http)->hasHeader('Authorization'))->toBeFalse();
+    });
+});
