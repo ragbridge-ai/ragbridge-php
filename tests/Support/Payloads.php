@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Ragbridge\Tests\Support;
 
+use RuntimeException;
+
 /**
  * Builders for valid decoded API payloads. Tests override or remove single fields to
  * exercise the failure cases.
@@ -28,6 +30,39 @@ final class Payloads
             'created_at' => '2026-03-14T09:26:53.589793Z',
             ...$overrides,
         ];
+    }
+
+    /**
+     * Decodes JSON the way the client does, so that an empty JSON object becomes an empty array.
+     *
+     * @return array<mixed>
+     */
+    public static function fromJson(string $json): array
+    {
+        $decoded = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+
+        return is_array($decoded) ? $decoded : throw new RuntimeException('The JSON is not an object.');
+    }
+
+    /**
+     * A document as a service with external ids sends it. For an upload, external_id and
+     * source_updated_at are null and metadata is empty.
+     *
+     * @param array<string, mixed> $overrides
+     *
+     * @return array<string, mixed>
+     */
+    public static function externalDocument(array $overrides = []): array
+    {
+        return self::document([
+            'external_id' => 'article:42',
+            'filename' => 'Refund policy',
+            'content_type' => 'text/plain',
+            'metadata' => ['locale' => 'en'],
+            'source_updated_at' => '2026-09-21T10:00:00.123456Z',
+            'updated_at' => '2026-09-21T10:05:00.500000Z',
+            ...$overrides,
+        ]);
     }
 
     /**

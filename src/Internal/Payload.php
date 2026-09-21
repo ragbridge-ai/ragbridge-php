@@ -120,13 +120,37 @@ final readonly class Payload
      */
     public function dateTime(string $key): DateTimeImmutable
     {
-        $value = $this->string($key);
+        return $this->parseDateTime($key, $this->string($key));
+    }
 
-        try {
-            return new DateTimeImmutable($value, new DateTimeZone('UTC'));
-        } catch (Exception) {
-            throw $this->invalid(sprintf('field "%s" must be an ISO 8601 timestamp, "%s" given', $key, $value));
-        }
+    /**
+     * A missing key is treated like an explicit null.
+     */
+    public function nullableDateTime(string $key): ?DateTimeImmutable
+    {
+        $value = $this->nullableString($key);
+
+        return $value === null ? null : $this->parseDateTime($key, $value);
+    }
+
+    /**
+     * A JSON object with arbitrary keys, such as user metadata.
+     *
+     * An empty JSON object decodes to an empty PHP array, which is indistinguishable from an
+     * empty list, so an empty array is accepted here. A non-empty list is not an object. A
+     * missing key or an explicit null yields an empty array.
+     *
+     * @return array<array-key, mixed>
+     */
+    public function map(string $key): array
+    {
+        $value = $this->optional($key);
+
+        return match (true) {
+            $value === null => [],
+            is_array($value) && ($value === [] || ! array_is_list($value)) => $value,
+            default => throw $this->wrongType($key, 'an object', $value),
+        };
     }
 
     /**
@@ -170,6 +194,15 @@ final readonly class Payload
         }
 
         return $objects;
+    }
+
+    private function parseDateTime(string $key, string $value): DateTimeImmutable
+    {
+        try {
+            return new DateTimeImmutable($value, new DateTimeZone('UTC'));
+        } catch (Exception) {
+            throw $this->invalid(sprintf('field "%s" must be an ISO 8601 timestamp, "%s" given', $key, $value));
+        }
     }
 
     private function required(string $key): mixed
