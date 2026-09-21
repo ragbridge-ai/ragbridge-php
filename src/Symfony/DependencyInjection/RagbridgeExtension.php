@@ -28,7 +28,10 @@ use Symfony\Component\HttpClient\Psr18Client;
 final class RagbridgeExtension extends Extension
 {
     /**
-     * @param bool|null $useSymfonyHttpClient force the choice of HTTP client, detected when null
+     * @param bool|null $useSymfonyHttpClient force the choice of HTTP client, detected when null;
+     *                                        for the package's own tests, not part of the public API
+     *
+     * @internal
      */
     public function __construct(private readonly ?bool $useSymfonyHttpClient = null) {}
 

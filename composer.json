@@ -2,6 +2,23 @@
     "name": "ragbridge/php",
     "description": "PHP client for the ragbridge retrieval-augmented generation service",
     "type": "library",
+    "keywords": [
+        "ragbridge",
+        "rag",
+        "retrieval-augmented-generation",
+        "llm",
+        "api-client",
+        "psr-18",
+        "laravel",
+        "symfony"
+    ],
+    "homepage": "https://github.com/ragbridge-ai/ragbridge-php",
+    "support": {
+        "issues": "https://github.com/ragbridge-ai/ragbridge-php/issues",
+        "source": "https://github.com/ragbridge-ai/ragbridge-php",
+        "docs": "https://github.com/ragbridge-ai/ragbridge-php/blob/main/docs/quickstart.md",
+        "security": "https://github.com/ragbridge-ai/ragbridge-php/security/policy"
+    },
     "license": "MIT",
     "require": {
         "php": "^8.2",
