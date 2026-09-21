@@ -19,6 +19,9 @@ generation all happen in the service.
   delete them
 - Ask questions and get an answer with its sources; choose the retrieval mode and the number
   of chunks, and optionally see why each chunk was found
+- Search without generating an answer, ask multi-step questions with the agent, and check
+  that the service is alive and ready
+- Optional retries with exponential backoff for transient failures, off by default
 - Typed, immutable response objects instead of arrays
 - One exception hierarchy for authentication, validation, transport and server errors
 - Works with any PSR-18 HTTP client, with no hard dependency on Guzzle

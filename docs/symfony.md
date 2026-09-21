@@ -41,6 +41,7 @@ ragbridge:
 | ---------- | -------- | -------------------------------------------------------------------- |
 | `base_url` | yes      | Root URL of the ragbridge service, for example `http://localhost:8000` |
 | `api_key`  | no       | Sent to the service as a bearer token                                |
+| `retry`    | no       | Retries of requests that failed for a transient reason, off by default; see [Retries](#retries) |
 
 Set the values in `.env.local`:
 
@@ -50,6 +51,48 @@ RAGBRIDGE_API_KEY=your-api-key
 ```
 
 The `default::` prefix makes the API key optional: without the variable, no key is sent.
+
+## Retries
+
+Retries are off by default. To repeat requests that fail because the service is briefly
+unavailable, enable them:
+
+```yaml
+ragbridge:
+    base_url: '%env(RAGBRIDGE_BASE_URL)%'
+    retry: true
+```
+
+`retry: true` uses the defaults below. To change them, write the options out:
+
+```yaml
+ragbridge:
+    retry:
+        enabled: true
+        max_attempts: 4
+        base_delay_ms: 200
+        max_delay_ms: 10000
+        retry_post: false
+```
+
+| Option          | Default | Meaning                                                              |
+| --------------- | ------- | -------------------------------------------------------------------- |
+| `enabled`       | `false` | Turns retries on                                                     |
+| `max_attempts`  | `3`     | Total number of tries, including the first                           |
+| `base_delay_ms` | `200`   | Pause before the first retry; it doubles for each further retry      |
+| `max_delay_ms`  | `10000` | Longest pause between two tries                                      |
+| `retry_post`    | `false` | Also retry POST requests: queries, searches, the agent and uploads   |
+
+Every option can be an environment variable, for example
+`enabled: '%env(bool:RAGBRIDGE_RETRY)%'` and `max_attempts: '%env(int:RAGBRIDGE_RETRY_ATTEMPTS)%'`.
+
+A request is repeated after a connection error and after HTTP 429, 502, 503 or 504, and
+never after other 4xx errors or HTTP 500. Only GET and DELETE requests are repeated unless
+`retry_post` is on. The [usage guide](usage.md#retry-failed-requests) explains the rules,
+and [ADR 0006](adr/0006-retry-policy.md) the reasoning.
+
+These retries are the bundle's own and are separate from Symfony's `retry_failed` option
+for `http_client`. Use one of them, not both, or a request is retried twice over.
 
 ## Usage
 
@@ -82,6 +125,10 @@ final class AskController extends AbstractController
     }
 }
 ```
+
+Besides `query()` and the document methods, the client can search without generating an
+answer (`search()`), run a multi-step question (`agent()`) and check the service
+(`health()` and `readiness()`). They are described in the [usage guide](usage.md).
 
 The service id is `Ragbridge\RagbridgeClient`, with `ragbridge.client` as an alias. The
 configuration is also available as the container parameters `ragbridge.base_url` and

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Ragbridge\Symfony\DependencyInjection;
 
 use Ragbridge\RagbridgeClient;
+use Ragbridge\Symfony\RetryPolicyFactory;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -24,6 +25,9 @@ use Symfony\Component\HttpClient\Psr18Client;
  * The client is available for autowiring as Ragbridge\RagbridgeClient and as the
  * `ragbridge.client` alias. The configuration values are exposed as the container
  * parameters `ragbridge.base_url` and `ragbridge.api_key`.
+ *
+ * Retries are off unless `ragbridge.retry.enabled` is set. The retry policy is then created by
+ * RetryPolicyFactory and passed to the client, so no extra service is exposed.
  */
 final class RagbridgeExtension extends Extension
 {
@@ -53,15 +57,46 @@ final class RagbridgeExtension extends Extension
         $container->setParameter('ragbridge.base_url', $config['base_url']);
         $container->setParameter('ragbridge.api_key', $config['api_key']);
 
-        $container->setDefinition(RagbridgeClient::class, $this->clientDefinition($container));
+        $retry = $config['retry'];
+        assert(is_array($retry));
+
+        // A literal value is checked here. An environment variable placeholder is a string
+        // until run time, when RetryPolicy checks the value it resolves to.
+        if (is_int($retry['max_attempts']) && $retry['max_attempts'] < 1) {
+            throw new InvalidConfigurationException('The "ragbridge.retry.max_attempts" option must be at least 1.');
+        }
+
+        $container->setDefinition(RagbridgeClient::class, $this->clientDefinition($container, $this->retryPolicyDefinition($retry)));
         $container->setAlias('ragbridge.client', RagbridgeClient::class);
     }
 
-    private function clientDefinition(ContainerBuilder $container): Definition
+    /**
+     * @param array<mixed> $retry the processed `retry` configuration
+     */
+    private function retryPolicyDefinition(array $retry): ?Definition
+    {
+        // Only a literal false is final. Any other value, including an environment variable
+        // placeholder, is evaluated by the factory when the client is created.
+        if ($retry['enabled'] === false) {
+            return null;
+        }
+
+        return (new Definition(null, [
+            $retry['enabled'],
+            $retry['max_attempts'],
+            $retry['base_delay_ms'],
+            $retry['max_delay_ms'],
+            $retry['retry_post'],
+        ]))->setFactory([RetryPolicyFactory::class, 'create']);
+    }
+
+    private function clientDefinition(ContainerBuilder $container, ?Definition $retryPolicy): Definition
     {
         if (! ($this->useSymfonyHttpClient ?? class_exists(Psr18Client::class))) {
-            return (new Definition(RagbridgeClient::class, ['%ragbridge.base_url%', '%ragbridge.api_key%']))
+            $definition = (new Definition(RagbridgeClient::class, ['%ragbridge.base_url%', '%ragbridge.api_key%']))
                 ->setFactory([RagbridgeClient::class, 'create']);
+
+            return $retryPolicy === null ? $definition : $definition->addArgument($retryPolicy);
         }
 
         // Psr18Client is a PSR-18 client and also a PSR-17 request and stream factory.
@@ -70,7 +105,8 @@ final class RagbridgeExtension extends Extension
             ->setArguments([new Reference('http_client', ContainerInterface::NULL_ON_INVALID_REFERENCE)]);
 
         $http = new Reference('ragbridge.http_client');
+        $definition = new Definition(RagbridgeClient::class, [$http, $http, $http, '%ragbridge.base_url%', '%ragbridge.api_key%']);
 
-        return new Definition(RagbridgeClient::class, [$http, $http, $http, '%ragbridge.base_url%', '%ragbridge.api_key%']);
+        return $retryPolicy === null ? $definition : $definition->addArgument($retryPolicy);
     }
 }

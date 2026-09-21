@@ -18,6 +18,11 @@ transport, typed responses, error handling and framework wiring.
   bundle for Symfony, both configured from the application's own configuration.
 - **Stable release.** Version 1.0 with a quick start guide, an example application and a
   documented public API. See the [changelog](../CHANGELOG.md).
+- **The remaining service endpoints.** Client methods for searching without generating an
+  answer, for multi-step questions and for the health checks.
+- **Retries with backoff.** Optional, configurable retries of requests that fail for
+  transient reasons, with exponential backoff and jitter. Off by default, and POST requests
+  are only retried when enabled explicitly ([ADR 0006](adr/0006-retry-policy.md)).
 
 ## Planned
 
@@ -31,10 +36,6 @@ releases, so none of it breaks the 1.0 API.
   service, that is, creating or replacing a document and deleting it by an identifier
   chosen by the application. Work on it starts once a released version of the service
   includes that support.
-- **The remaining service endpoints.** Client methods for searching without generating an
-  answer, for multi-step questions, and for the health checks.
-- **Retries with backoff.** Optional, configurable retries of requests that fail for
-  transient reasons, such as a connection error or a 5xx response, with exponential backoff.
 - **Streaming answers.** Receiving an answer while it is generated. *Depends on the
   service,* which does not offer streaming today.
 - **WordPress integration.** Use of the client from WordPress plugins and themes. The core

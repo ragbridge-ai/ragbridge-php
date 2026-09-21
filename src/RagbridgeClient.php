@@ -16,8 +16,11 @@ use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Http\Message\StreamInterface;
+use Ragbridge\Dto\AgentResult;
 use Ragbridge\Dto\Document;
+use Ragbridge\Dto\HealthStatus;
 use Ragbridge\Dto\QueryResult;
+use Ragbridge\Dto\SearchResult;
 use Ragbridge\Exception\ApiException;
 use Ragbridge\Exception\AuthenticationException;
 use Ragbridge\Exception\InvalidResponseException;
@@ -27,6 +30,9 @@ use Ragbridge\Exception\ServerException;
 use Ragbridge\Exception\TransportException;
 use Ragbridge\Exception\ValidationException;
 use Ragbridge\Internal\MultipartFile;
+use Ragbridge\Internal\RetryAfter;
+use RuntimeException;
+use Throwable;
 
 /**
  * Client for the ragbridge HTTP API.
@@ -38,6 +44,8 @@ use Ragbridge\Internal\MultipartFile;
  * The class is not final so that applications and framework facades can replace it with a
  * test double. Its state is immutable.
  *
+ * Failed requests are not repeated unless a {@see RetryPolicy} is given.
+ *
  * A failed call is reported as an exception implementing {@see Exception\RagbridgeException}.
  * Invalid arguments, such as a malformed base URL or a missing file, raise an
  * InvalidArgumentException instead.
@@ -48,9 +56,16 @@ class RagbridgeClient
 
     private readonly ?string $apiKey;
 
+    /** @var Closure(int): void */
+    private readonly Closure $sleep;
+
     /**
      * @param string $baseUrl root URL of the service, for example http://localhost:8000
      * @param string|null $apiKey sent as a bearer token; null or an empty string means no key
+     * @param RetryPolicy|null $retryPolicy when set, failed requests are sent again as the policy says
+     * @param Closure(int): void|null $sleep waits for the given number of milliseconds between two
+     *                                       tries; usleep() when null. Replace it in tests to avoid
+     *                                       waiting.
      *
      * @throws InvalidArgumentException when the base URL is not an absolute http(s) URL
      */
@@ -60,6 +75,8 @@ class RagbridgeClient
         private readonly StreamFactoryInterface $streamFactory,
         string $baseUrl,
         ?string $apiKey = null,
+        private readonly ?RetryPolicy $retryPolicy = null,
+        ?Closure $sleep = null,
     ) {
         $parts = parse_url($baseUrl);
 
@@ -76,6 +93,9 @@ class RagbridgeClient
 
         $this->baseUrl = rtrim($baseUrl, '/');
         $this->apiKey = $apiKey === '' ? null : $apiKey;
+        $this->sleep = $sleep ?? static function (int $milliseconds): void {
+            usleep($milliseconds * 1000);
+        };
     }
 
     /**
@@ -86,11 +106,12 @@ class RagbridgeClient
      *
      * @param string $baseUrl root URL of the service, for example http://localhost:8000
      * @param string|null $apiKey sent as a bearer token when set
+     * @param RetryPolicy|null $retryPolicy when set, failed requests are sent again as the policy says
      *
      * @throws InvalidArgumentException when the base URL is not an absolute http(s) URL
      * @throws \Http\Discovery\Exception\NotFoundException when no PSR-18 client or PSR-17 factory is installed
      */
-    public static function create(string $baseUrl, ?string $apiKey = null): self
+    public static function create(string $baseUrl, ?string $apiKey = null, ?RetryPolicy $retryPolicy = null): self
     {
         return new self(
             Psr18ClientDiscovery::find(),
@@ -98,6 +119,7 @@ class RagbridgeClient
             Psr17FactoryDiscovery::findStreamFactory(),
             $baseUrl,
             $apiKey,
+            $retryPolicy,
         );
     }
 
@@ -116,17 +138,55 @@ class RagbridgeClient
         ?SearchMode $mode = null,
         bool $explain = false,
     ): QueryResult {
-        $body = ['question' => $question, 'top_k' => $topK];
-
-        if ($mode !== null) {
-            $body['mode'] = $mode->value;
-        }
-
-        if ($explain) {
-            $body['explain'] = true;
-        }
+        $body = ['question' => $question, ...$this->retrievalOptions($topK, $mode, $explain)];
 
         return $this->hydrate(QueryResult::fromArray(...), $this->object($this->send('POST', '/query', $body)));
+    }
+
+    /**
+     * Searches the documents and returns the matching chunks, without generating an answer.
+     *
+     * It runs the same retrieval as {@see query()} and stops before generation. Use it when
+     * your application reasons over the chunks itself.
+     *
+     * @param int $topK number of chunks to retrieve, the service accepts 1 to 20
+     * @param SearchMode|null $mode retrieval strategy, the service default when null
+     * @param bool $explain include retrieval details in each hit
+     *
+     * @throws Exception\RagbridgeException
+     */
+    public function search(
+        string $query,
+        int $topK = 5,
+        ?SearchMode $mode = null,
+        bool $explain = false,
+    ): SearchResult {
+        $body = ['query' => $query, ...$this->retrievalOptions($topK, $mode, $explain)];
+
+        return $this->hydrate(SearchResult::fromArray(...), $this->object($this->send('POST', '/search', $body)));
+    }
+
+    /**
+     * Answers a question that may need several searches.
+     *
+     * The service searches up to $maxSteps times, then answers from everything it found.
+     * The result lists the searches it ran, so a wrong answer can be traced back to what
+     * was looked for. The call is synchronous and, with a local model, can take a while:
+     * give your HTTP client a generous timeout.
+     *
+     * @param int|null $maxSteps most searches to run, the service default when null
+     *
+     * @throws Exception\RagbridgeException
+     */
+    public function agent(string $question, ?int $maxSteps = null): AgentResult
+    {
+        $body = ['question' => $question];
+
+        if ($maxSteps !== null) {
+            $body['max_steps'] = $maxSteps;
+        }
+
+        return $this->hydrate(AgentResult::fromArray(...), $this->object($this->send('POST', '/agent', $body)));
     }
 
     /**
@@ -174,7 +234,18 @@ class RagbridgeClient
             $contentType ?? self::guessContentType($filename),
         );
 
-        $data = $this->send('POST', '/documents', stream: $multipart->body(), contentType: $multipart->contentType());
+        // A retry has to send the body again from where it started, which may not be the
+        // start of the caller's stream. Without a way back the upload is not retried.
+        $body = $multipart->body();
+        $start = $stream->isSeekable() ? $stream->tell() : 0;
+        $rewind = $body->isSeekable()
+            ? static function () use ($body, $stream, $start): void {
+                $body->rewind();
+                $stream->seek($start);
+            }
+        : null;
+
+        $data = $this->send('POST', '/documents', stream: $body, contentType: $multipart->contentType(), rewind: $rewind);
 
         return $this->hydrate(Document::fromArray(...), $this->object($data));
     }
@@ -218,10 +289,60 @@ class RagbridgeClient
     }
 
     /**
+     * Checks that the service process is running (liveness). It does not check the database.
+     *
+     * @throws Exception\RagbridgeException
+     */
+    public function health(): HealthStatus
+    {
+        return $this->hydrate(HealthStatus::fromArray(...), $this->object($this->send('GET', '/health')));
+    }
+
+    /**
+     * Checks that the service can serve requests (readiness), which includes its database.
+     *
+     * A service that is not ready answers with HTTP 503, which is reported as a
+     * {@see ServerException}, like any other failed call.
+     *
+     * @throws ServerException when the service is running but not ready
+     * @throws Exception\RagbridgeException
+     */
+    public function readiness(): HealthStatus
+    {
+        return $this->hydrate(HealthStatus::fromArray(...), $this->object($this->send('GET', '/health/ready')));
+    }
+
+    /**
+     * The request fields that query and search have in common. Optional fields are left out
+     * unless they are set, so the service applies its own defaults.
+     *
+     * @return array<string, mixed>
+     */
+    private function retrievalOptions(int $topK, ?SearchMode $mode, bool $explain): array
+    {
+        $options = ['top_k' => $topK];
+
+        if ($mode !== null) {
+            $options['mode'] = $mode->value;
+        }
+
+        if ($explain) {
+            $options['explain'] = true;
+        }
+
+        return $options;
+    }
+
+    /**
      * Sends a request and returns the decoded JSON body, or null when the response has none.
+     *
+     * When a retry policy applies to the request, a failure that the policy considers
+     * transient is followed by another try, after a pause.
      *
      * @param array<string, mixed>|null $json request body, encoded as JSON
      * @param StreamInterface|null $stream raw request body, used instead of $json
+     * @param Closure(): void|null $rewind puts $stream back at its start; the request is retried
+     *                                     only when this is given, as the body cannot be sent twice otherwise
      *
      * @throws Exception\RagbridgeException
      */
@@ -231,7 +352,55 @@ class RagbridgeClient
         ?array $json = null,
         ?StreamInterface $stream = null,
         ?string $contentType = null,
+        ?Closure $rewind = null,
     ): mixed {
+        $policy = $this->retryPolicy !== null
+            && $this->retryPolicy->appliesTo($method)
+            && ($stream === null || $rewind !== null)
+                ? $this->retryPolicy
+                : null;
+
+        $attempt = 1;
+
+        while (true) {
+            $request = $this->buildRequest($method, $path, $json, $stream, $contentType);
+
+            try {
+                $response = $this->dispatch($request);
+            } catch (TransportException $e) {
+                $this->pauseBeforeRetry($policy, $attempt++, null, $e, $rewind);
+
+                continue;
+            }
+
+            $status = $response->getStatusCode();
+            $body = (string) $response->getBody();
+
+            if ($status >= 200 && $status < 300) {
+                return $body === '' ? null : $this->decode($body);
+            }
+
+            $error = $this->errorFor($status, $this->decodeLeniently($body));
+
+            if ($policy === null || ! $policy->isRetryableStatus($status)) {
+                throw $error;
+            }
+
+            $retryAfter = RetryAfter::milliseconds($response->getHeaderLine('Retry-After'));
+            $this->pauseBeforeRetry($policy, $attempt++, $retryAfter, $error, $rewind);
+        }
+    }
+
+    /**
+     * @param array<string, mixed>|null $json
+     */
+    private function buildRequest(
+        string $method,
+        string $path,
+        ?array $json,
+        ?StreamInterface $stream,
+        ?string $contentType,
+    ): RequestInterface {
         $request = $this->requestFactory
             ->createRequest($method, $this->baseUrl . $path)
             ->withHeader('Accept', 'application/json');
@@ -241,6 +410,7 @@ class RagbridgeClient
         }
 
         if ($json !== null) {
+            // A new body for every try: a sent stream may have been read to its end.
             $request = $request
                 ->withHeader('Content-Type', 'application/json')
                 ->withBody($this->streamFactory->createStream($this->encode($json)));
@@ -250,15 +420,43 @@ class RagbridgeClient
                 ->withBody($stream);
         }
 
-        $response = $this->dispatch($request);
-        $status = $response->getStatusCode();
-        $body = (string) $response->getBody();
+        return $request;
+    }
 
-        if ($status < 200 || $status >= 300) {
-            throw $this->errorFor($status, $this->decodeLeniently($body));
+    /**
+     * Waits before the next try, or throws the failure when there is not going to be one.
+     *
+     * @param RetryPolicy|null $policy null when the request is not to be retried at all
+     * @param int $attempt number of the try that failed, starting at 1
+     * @param int|null $retryAfterMs wait requested by the service
+     * @param Closure(): void|null $rewind puts a streamed body back at its start
+     *
+     * @throws Throwable the failure, when the request is not retried
+     */
+    private function pauseBeforeRetry(
+        ?RetryPolicy $policy,
+        int $attempt,
+        ?int $retryAfterMs,
+        Throwable $failure,
+        ?Closure $rewind,
+    ): void {
+        $delay = $policy === null || $attempt >= $policy->maxAttempts
+            ? null
+            : $policy->delayMs($attempt, $retryAfterMs);
+
+        if ($delay === null) {
+            throw $failure;
         }
 
-        return $body === '' ? null : $this->decode($body);
+        if ($rewind !== null) {
+            try {
+                $rewind();
+            } catch (RuntimeException) {
+                throw $failure;
+            }
+        }
+
+        ($this->sleep)($delay);
     }
 
     /**

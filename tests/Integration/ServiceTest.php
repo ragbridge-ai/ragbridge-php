@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Ragbridge\Dto\Document;
 use Ragbridge\Dto\DocumentStatus;
+use Ragbridge\Dto\SearchHit;
 use Ragbridge\Dto\Source;
 use Ragbridge\Exception\AuthenticationException;
 use Ragbridge\Exception\NotFoundException;
@@ -147,3 +148,89 @@ it('answers a question with the sources it used', function (SearchMode $mode): v
     'vector' => [SearchMode::Vector],
     'keyword' => [SearchMode::Keyword],
 ]);
+
+it('searches without generating an answer', function (SearchMode $mode): void {
+    $client = Integration::client();
+    $token = Integration::token();
+    $stream = Fixtures::factory()->createStream("The access phrase for the {$token} vault is amber-compass.\n");
+
+    $uploaded = $client->uploadStream($stream, "vault-{$token}.txt");
+
+    try {
+        Integration::waitUntilProcessed($client, $uploaded);
+
+        $result = $client->search("access phrase for the {$token} vault", topK: 3, mode: $mode, explain: true);
+
+        $ours = array_values(array_filter(
+            $result->results,
+            static fn(SearchHit $hit): bool => $hit->documentId === $uploaded->id,
+        ));
+
+        expect($ours)->not->toBeEmpty()
+            ->and($result->candidateCount)->toBeInt();
+
+        $hit = $ours[0];
+
+        expect($hit->filename)->toBe("vault-{$token}.txt")
+            ->and($hit->content)->toContain('amber-compass')
+            ->and($hit->score)->toBeFloat()
+            ->and($hit->retrieval)->not->toBeNull();
+    } finally {
+        $client->deleteDocument($uploaded->id);
+    }
+})->with([
+    'hybrid' => [SearchMode::Hybrid],
+    'vector' => [SearchMode::Vector],
+    'keyword' => [SearchMode::Keyword],
+]);
+
+it('rejects an invalid search with the fields that are wrong', function (): void {
+    $e = Thrown::by(fn() => Integration::client()->search('anything', topK: 0), ValidationException::class);
+
+    $locations = array_map(static fn(array $error): string => implode('.', $error['loc']), $e->errors());
+
+    expect($locations)->toContain('body.top_k');
+});
+
+it('answers with the agent and reports the steps it took', function (): void {
+    $client = Integration::client();
+    $token = Integration::token();
+    $stream = Fixtures::factory()->createStream("The access phrase for the {$token} cellar is silver-anchor.\n");
+
+    $uploaded = $client->uploadStream($stream, "cellar-{$token}.txt");
+
+    try {
+        Integration::waitUntilProcessed($client, $uploaded);
+
+        $result = $client->agent("What is the access phrase for the {$token} cellar?", maxSteps: 2);
+
+        $ours = array_filter(
+            $result->sources,
+            static fn(Source $source): bool => $source->documentId === $uploaded->id,
+        );
+
+        expect($result->answer)->not->toBe('')
+            ->and($ours)->not->toBeEmpty()
+            ->and($result->steps)->not->toBeEmpty()
+            ->and($result->steps[0]->query)->toBeString()
+            ->and($result->stepCount)->toBeGreaterThanOrEqual(1)
+            ->and($result->stepCount)->toBeLessThanOrEqual(2);
+    } finally {
+        $client->deleteDocument($uploaded->id);
+    }
+});
+
+it('rejects an invalid agent step limit', function (): void {
+    $e = Thrown::by(fn() => Integration::client()->agent('anything', maxSteps: 0), ValidationException::class);
+
+    $locations = array_map(static fn(array $error): string => implode('.', $error['loc']), $e->errors());
+
+    expect($locations)->toContain('body.max_steps');
+});
+
+it('reports that the service is alive and ready', function (): void {
+    $client = Integration::client();
+
+    expect($client->health()->isOk())->toBeTrue()
+        ->and($client->readiness()->isOk())->toBeTrue();
+});
