@@ -128,7 +128,7 @@ use Illuminate\Support\Facades\Route;
 use Ragbridge\Laravel\Facades\Ragbridge;
 
 Route::get('/ask', function (Request $request) {
-    $result = Ragbridge::query($request->string('q')->toString());
+    $result = Ragbridge::query($request->string('question')->toString());
 
     return [
         'answer' => $result->answer,
@@ -137,7 +137,7 @@ Route::get('/ask', function (Request $request) {
 });
 ```
 
-Open `/ask?q=How many days of leave do employees get?`. Upload documents with
+Open `/ask?question=How many days of leave do employees get?`. Upload documents with
 `Ragbridge::upload($path)`, for example from an Artisan command or a controller that receives
 a file. To type-hint the client instead of using the facade, inject
 `Ragbridge\RagbridgeClient`. See the [Laravel guide](laravel.md) for publishing the
@@ -193,7 +193,7 @@ final class AskController extends AbstractController
     #[Route('/ask')]
     public function __invoke(Request $request): JsonResponse
     {
-        $result = $this->ragbridge->query((string) $request->query->get('q'));
+        $result = $this->ragbridge->query((string) $request->query->get('question'));
 
         return $this->json([
             'answer' => $result->answer,
@@ -203,7 +203,7 @@ final class AskController extends AbstractController
 }
 ```
 
-Open `/ask?q=How many days of leave do employees get?`. Requests go through your
+Open `/ask?question=How many days of leave do employees get?`. Requests go through your
 application's `http_client` service, so timeouts and the profiler work as usual. See the
 [Symfony guide](symfony.md) for details.
 
