@@ -1,0 +1,25 @@
+{
+    "name": "ragbridge/example-basic",
+    "description": "Minimal upload-and-ask application that uses ragbridge/php",
+    "type": "project",
+    "license": "MIT",
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../..",
+            "options": {
+                "symlink": true
+            }
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "guzzlehttp/guzzle": "^7.0 || ^8.0",
+        "ragbridge/php": "@dev"
+    },
+    "config": {
+        "allow-plugins": {
+            "php-http/discovery": true
+        }
+    }
+}
