@@ -42,7 +42,7 @@ services:
 
   app:
     build:
-      context: https://github.com/ragbridge-ai/ragbridge.git#7cd69ef46c452ccc43bdc93c15989982bc5d9389
+      context: https://github.com/ragbridge-ai/ragbridge.git#7ce2c532bf4439e2d3d82f99d94fd58bdfb6700b
     environment:
       ENVIRONMENT: development
       DATABASE_URL: postgresql+psycopg://ragbridge:ragbridge@postgres:5432/ragbridge
