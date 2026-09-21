@@ -1,0 +1,52 @@
+{
+    "name": "ragbridge/php",
+    "description": "PHP client for the ragbridge retrieval-augmented generation service",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.2",
+        "php-http/discovery": "^1.20",
+        "psr/http-client": "^1.0",
+        "psr/http-factory": "^1.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "Ragbridge\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Ragbridge\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "platform": {
+            "php": "8.2.0"
+        },
+        "sort-packages": true,
+        "allow-plugins": {
+            "php-http/discovery": true,
+            "pestphp/pest-plugin": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "require-dev": {
+        "laravel/pint": "^1.30",
+        "nyholm/psr7": "^1.8",
+        "pestphp/pest": "^3.8",
+        "php-http/mock-client": "^1.6",
+        "phpstan/phpstan": "^2.2",
+        "phpstan/phpstan-strict-rules": "^2.0"
+    },
+    "scripts": {
+        "stan": "phpstan analyse --memory-limit=1G",
+        "lint": "pint --test",
+        "check": [
+            "@lint",
+            "@stan",
+            "@test"
+        ],
+        "test": "pest"
+    }
+}
