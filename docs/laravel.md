@@ -30,6 +30,32 @@ configuration file, publish it to `config/ragbridge.php`:
 php artisan vendor:publish --tag=ragbridge-config
 ```
 
+## Retries
+
+Retries are off by default. To repeat requests that fail because the service is briefly
+unavailable, enable them in `.env`:
+
+```dotenv
+RAGBRIDGE_RETRY_ENABLED=true
+```
+
+| Variable                        | Default | Meaning                                                              |
+| ------------------------------- | ------- | -------------------------------------------------------------------- |
+| `RAGBRIDGE_RETRY_ENABLED`       | `false` | Turns retries on                                                     |
+| `RAGBRIDGE_RETRY_MAX_ATTEMPTS`  | `3`     | Total number of tries, including the first                           |
+| `RAGBRIDGE_RETRY_BASE_DELAY_MS` | `200`   | Pause before the first retry; it doubles for each further retry      |
+| `RAGBRIDGE_RETRY_MAX_DELAY_MS`  | `10000` | Longest pause between two tries                                      |
+| `RAGBRIDGE_RETRY_POST`          | `false` | Also retry POST requests: queries, searches, the agent and uploads   |
+
+They are the `retry` section of `config/ragbridge.php`. A request is repeated after a
+connection error and after HTTP 429, 502, 503 or 504, and never after other 4xx errors or
+HTTP 500. Only GET and DELETE requests are repeated unless `RAGBRIDGE_RETRY_POST` is on.
+The [usage guide](usage.md#retry-failed-requests) explains the rules, and
+[ADR 0006](adr/0006-retry-policy.md) the reasoning.
+
+If you bind the client yourself, as in [Setting a timeout](#setting-a-timeout), pass a
+`RetryPolicy` as the sixth constructor argument to keep retries.
+
 ## Usage
 
 The client is a singleton in the container. Type-hint it in a controller, a job or any
@@ -65,6 +91,10 @@ use Ragbridge\Laravel\Facades\Ragbridge;
 $result = Ragbridge::query('How many days of leave do employees get?');
 ```
 
+Besides `query()` and the document methods, the client can search without generating an
+answer (`search()`), run a multi-step question (`agent()`) and check the service
+(`health()` and `readiness()`). They are described in the [usage guide](usage.md).
+
 ## Setting a timeout
 
 The client uses the PSR-18 client that is found by discovery, which is Guzzle in a standard
@@ -94,6 +124,7 @@ class AppServiceProvider extends ServiceProvider
                 $factory,
                 config('ragbridge.base_url'),
                 config('ragbridge.api_key'),
+                // Pass a RetryPolicy here to retry failed requests, see "Retries" above.
             );
         });
     }

@@ -7,6 +7,27 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `search()`: retrieve the matching chunks without generating an answer. It returns a
+  `SearchResult` of `SearchHit` objects, and takes the same `topK`, `mode` and `explain`
+  arguments as `query()`.
+- `agent()`: answer a question with several searches. It returns an `AgentResult` with the
+  answer, the sources and the `AgentStep` objects that show what was searched.
+- `health()` and `readiness()`, which return a `HealthStatus`. A service that is not ready
+  answers with HTTP 503, reported as a `ServerException`.
+- Optional retries with exponential backoff and jitter, off by default. A `RetryPolicy`,
+  passed to `RagbridgeClient::create()` or to the constructor, repeats requests after a
+  transport error and after HTTP 429, 502, 503 and 504, and follows `Retry-After`. Only GET
+  and DELETE are repeated unless `retryPost` is set. Other 4xx errors and HTTP 500 are never
+  retried. The pause is an injectable function, so tests do not wait. See ADR 0006.
+- Laravel: a `retry` section in `config/ragbridge.php` and the environment variables
+  `RAGBRIDGE_RETRY_ENABLED`, `RAGBRIDGE_RETRY_MAX_ATTEMPTS`, `RAGBRIDGE_RETRY_BASE_DELAY_MS`,
+  `RAGBRIDGE_RETRY_MAX_DELAY_MS` and `RAGBRIDGE_RETRY_POST`.
+- Symfony: a `retry` option in the `ragbridge` configuration (`enabled`, `max_attempts`,
+  `base_delay_ms`, `max_delay_ms` and `retry_post`).
+- ADR 0006 on the retry policy.
+
 ## [1.0.0] - 2026-09-21
 
 The first stable release. It contains everything from the development milestones 0.1.0 and
