@@ -7,6 +7,7 @@ use Ragbridge\Exception\AuthenticationException;
 use Ragbridge\Exception\InvalidResponseException;
 use Ragbridge\Exception\NotFoundException;
 use Ragbridge\Exception\RagbridgeException;
+use Ragbridge\Exception\RequestFailedException;
 use Ragbridge\Exception\ServerException;
 use Ragbridge\Exception\TransportException;
 use Ragbridge\Exception\ValidationException;
@@ -20,6 +21,7 @@ it('implements the marker interface in every exception', function (string $class
     NotFoundException::class,
     ValidationException::class,
     ServerException::class,
+    RequestFailedException::class,
 ]);
 
 it('groups the status based exceptions under ApiException', function (string $class): void {
@@ -29,6 +31,7 @@ it('groups the status based exceptions under ApiException', function (string $cl
     NotFoundException::class,
     ValidationException::class,
     ServerException::class,
+    RequestFailedException::class,
 ]);
 
 it('carries the status code and the decoded body', function (string $class, int $status): void {
@@ -49,6 +52,7 @@ it('carries the status code and the decoded body', function (string $class, int 
     'not found' => [NotFoundException::class, 404],
     'server 500' => [ServerException::class, 500],
     'server 503' => [ServerException::class, 503],
+    'rate limited' => [RequestFailedException::class, 429],
 ]);
 
 it('uses the detail message of the service when there is one', function (): void {
