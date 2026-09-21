@@ -7,6 +7,11 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-21
+
+Adds the remaining service endpoints and optional retries. There are no breaking changes:
+retries are off unless enabled, and existing code behaves as before.
+
 ### Added
 
 - `search()`: retrieve the matching chunks without generating an answer. It returns a
@@ -89,5 +94,6 @@ releases.
   Actions, roadmap, architecture decision records, contributing guide, security policy and
   code of conduct.
 
-[Unreleased]: https://github.com/ragbridge-ai/ragbridge-php/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/ragbridge-ai/ragbridge-php/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/ragbridge-ai/ragbridge-php/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/ragbridge-ai/ragbridge-php/releases/tag/v1.0.0
