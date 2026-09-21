@@ -227,3 +227,10 @@ it('rejects an invalid agent step limit', function (): void {
 
     expect($locations)->toContain('body.max_steps');
 });
+
+it('reports that the service is alive and ready', function (): void {
+    $client = Integration::client();
+
+    expect($client->health()->isOk())->toBeTrue()
+        ->and($client->readiness()->isOk())->toBeTrue();
+});

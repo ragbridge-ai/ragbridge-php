@@ -18,6 +18,7 @@ use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Http\Message\StreamInterface;
 use Ragbridge\Dto\AgentResult;
 use Ragbridge\Dto\Document;
+use Ragbridge\Dto\HealthStatus;
 use Ragbridge\Dto\QueryResult;
 use Ragbridge\Dto\SearchResult;
 use Ragbridge\Exception\ApiException;
@@ -255,6 +256,30 @@ class RagbridgeClient
     public function deleteDocument(string $id): void
     {
         $this->send('DELETE', '/documents/' . rawurlencode($id));
+    }
+
+    /**
+     * Checks that the service process is running (liveness). It does not check the database.
+     *
+     * @throws Exception\RagbridgeException
+     */
+    public function health(): HealthStatus
+    {
+        return $this->hydrate(HealthStatus::fromArray(...), $this->object($this->send('GET', '/health')));
+    }
+
+    /**
+     * Checks that the service can serve requests (readiness), which includes its database.
+     *
+     * A service that is not ready answers with HTTP 503, which is reported as a
+     * {@see ServerException}, like any other failed call.
+     *
+     * @throws ServerException when the service is running but not ready
+     * @throws Exception\RagbridgeException
+     */
+    public function readiness(): HealthStatus
+    {
+        return $this->hydrate(HealthStatus::fromArray(...), $this->object($this->send('GET', '/health/ready')));
     }
 
     /**

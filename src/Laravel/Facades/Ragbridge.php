@@ -18,6 +18,8 @@ use Ragbridge\RagbridgeClient;
  * @method static list<\Ragbridge\Dto\Document> documents()
  * @method static \Ragbridge\Dto\Document document(string $id)
  * @method static void deleteDocument(string $id)
+ * @method static \Ragbridge\Dto\HealthStatus health()
+ * @method static \Ragbridge\Dto\HealthStatus readiness()
  *
  * @see RagbridgeClient
  */
