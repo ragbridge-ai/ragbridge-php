@@ -25,19 +25,28 @@
         },
         "sort-packages": true,
         "allow-plugins": {
-            "php-http/discovery": true
+            "php-http/discovery": true,
+            "pestphp/pest-plugin": true
         }
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
     "require-dev": {
         "laravel/pint": "^1.30",
+        "nyholm/psr7": "^1.8",
+        "pestphp/pest": "^3.8",
+        "php-http/mock-client": "^1.6",
         "phpstan/phpstan": "^2.2",
         "phpstan/phpstan-strict-rules": "^2.0"
     },
     "scripts": {
         "stan": "phpstan analyse --memory-limit=1G",
         "lint": "pint --test",
-        "check": ["@lint", "@stan"]
+        "check": [
+            "@lint",
+            "@stan",
+            "@test"
+        ],
+        "test": "pest"
     }
 }
