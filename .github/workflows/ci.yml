@@ -187,3 +187,60 @@ jobs:
 
       - name: Validate composer.json
         run: composer validate --strict --no-check-lock
+
+  # The client against a real ragbridge service, started with Docker Compose. The tests are
+  # skipped everywhere else because they need this service.
+  integration:
+    name: integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+
+      - name: Locate the Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer downloads
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-integration-${{ hashFiles('composer.json') }}
+          restore-keys: |
+            composer-${{ runner.os }}-integration-
+
+      - name: Install dependencies
+        run: |
+          composer config --unset platform.php
+          composer update ${{ env.COMPOSER_FLAGS }}
+
+      # A small model keeps the job fast on a runner without a GPU. The tests check the
+      # structure of answers and sources, not the wording.
+      - name: Start the ragbridge service
+        env:
+          CHAT_MODEL: ollama/qwen2.5:0.5b
+        run: |
+          tests/Integration/start.sh > "$RUNNER_TEMP/service.env"
+          echo "::add-mask::$(sed -n 's/^export RAGBRIDGE_INTEGRATION_API_KEY=//p' "$RUNNER_TEMP/service.env")"
+          sed 's/^export //' "$RUNNER_TEMP/service.env" >> "$GITHUB_ENV"
+          rm "$RUNNER_TEMP/service.env"
+
+      - name: Run the integration tests
+        run: vendor/bin/pest --group=integration
+
+      - name: Show the service logs
+        if: failure()
+        run: docker compose -f tests/Integration/compose.yaml --profile ollama logs --tail=200 app
+
+      - name: Stop the service
+        if: always()
+        run: docker compose -f tests/Integration/compose.yaml --profile ollama down --volumes

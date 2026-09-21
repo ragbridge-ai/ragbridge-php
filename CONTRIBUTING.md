@@ -38,6 +38,32 @@ a feature that a newer release of a dependency introduced.
 Tests must not call a live service. Use the mock HTTP client and the JSON fixtures in
 `tests/Fixtures/` instead.
 
+## Integration tests
+
+Most tests never call a live service. A separate group of integration tests runs the client
+against a real ragbridge service. They are skipped unless the environment variables
+`RAGBRIDGE_INTEGRATION_URL` and `RAGBRIDGE_INTEGRATION_API_KEY` are set, so `composer test`
+does not need Docker or a network.
+
+`tests/Integration/start.sh` starts the service with Docker Compose, creates an API key and
+prints the variables:
+
+```bash
+eval "$(tests/Integration/start.sh)"
+vendor/bin/pest --group=integration
+
+docker compose -f tests/Integration/compose.yaml --profile ollama down --volumes
+```
+
+The first run builds the service from source and downloads the models, which takes a while.
+If Ollama already runs on your machine, use it instead and skip the downloads:
+
+```bash
+eval "$(RAGBRIDGE_INTEGRATION_OLLAMA=host tests/Integration/start.sh)"
+```
+
+CI runs the group in its own job, `integration`.
+
 ## Coding rules
 
 - Put `declare(strict_types=1);` at the top of every PHP file.
