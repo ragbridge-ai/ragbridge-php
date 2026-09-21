@@ -29,5 +29,15 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "require-dev": {
+        "laravel/pint": "^1.30",
+        "phpstan/phpstan": "^2.2",
+        "phpstan/phpstan-strict-rules": "^2.0"
+    },
+    "scripts": {
+        "stan": "phpstan analyse --memory-limit=1G",
+        "lint": "pint --test",
+        "check": ["@lint", "@stan"]
+    }
 }
