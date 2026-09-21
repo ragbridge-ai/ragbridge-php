@@ -55,7 +55,7 @@ services:
 
   app:
     build:
-      context: https://github.com/ragbridge-ai/ragbridge.git#481b074d4a306cfdeb4c1b2512855d0e69d37321
+      context: https://github.com/ragbridge-ai/ragbridge.git#234575711990bc415cf610b6c1e00dedad908dc5
     environment: *service-environment
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -76,7 +76,7 @@ services:
   # service answers with 202 and leaves pending until this worker has embedded them.
   worker:
     build:
-      context: https://github.com/ragbridge-ai/ragbridge.git#481b074d4a306cfdeb4c1b2512855d0e69d37321
+      context: https://github.com/ragbridge-ai/ragbridge.git#234575711990bc415cf610b6c1e00dedad908dc5
     command: ["arq", "ragbridge.worker.WorkerSettings"]
     # The worker exits when it loses its connection to Redis, and comes back with it.
     restart: unless-stopped
