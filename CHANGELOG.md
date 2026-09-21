@@ -7,6 +7,28 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Documents identified by an id of your application, for a service version that supports
+  external ids: `putDocument()` saves the current state of a record, `getByExternalId()`
+  fetches it and `deleteByExternalId()` removes it. `putDocument()` returns a
+  `SyncedDocument` with a `SyncResult` (created, replaced, updated, unchanged or stale), the
+  document and the HTTP status.
+- `waitUntilProcessed()`, which waits until a pending document is ready or failed, and the
+  `ProcessingTimeoutException` that it raises when the time runs out.
+- `Document` has the new properties `externalId`, `metadata`, `sourceUpdatedAt` and
+  `updatedAt`. They keep their defaults when the service does not send them.
+- `ConflictException` (HTTP 409) and `ServiceUnavailableException` (HTTP 503).
+
+### Changed
+
+- A 409 and a 503 are now reported as `ConflictException` and `ServiceUnavailableException`.
+  They extend `RequestFailedException` and `ServerException`, which were thrown for these
+  statuses before, so existing `catch` blocks keep working. Those two classes are no longer
+  `final`.
+- A retry policy also repeats `PUT` requests by default, because `PUT` is idempotent. The
+  client did not send any before.
+
 ## [1.1.0] - 2026-09-21
 
 Adds the remaining service endpoints and optional retries. There are no breaking changes:

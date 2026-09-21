@@ -87,7 +87,7 @@ Every option can be an environment variable, for example
 `enabled: '%env(bool:RAGBRIDGE_RETRY)%'` and `max_attempts: '%env(int:RAGBRIDGE_RETRY_ATTEMPTS)%'`.
 
 A request is repeated after a connection error and after HTTP 429, 502, 503 or 504, and
-never after other 4xx errors or HTTP 500. Only GET and DELETE requests are repeated unless
+never after other 4xx errors or HTTP 500. Only GET, PUT and DELETE requests are repeated unless
 `retry_post` is on. The [usage guide](usage.md#retry-failed-requests) explains the rules,
 and [ADR 0006](adr/0006-retry-policy.md) the reasoning.
 
@@ -127,8 +127,10 @@ final class AskController extends AbstractController
 ```
 
 Besides `query()` and the document methods, the client can search without generating an
-answer (`search()`), run a multi-step question (`agent()`) and check the service
-(`health()` and `readiness()`). They are described in the [usage guide](usage.md).
+answer (`search()`), run a multi-step question (`agent()`), check the service
+(`health()` and `readiness()`) and keep documents in step with your records by your own
+ids (`putDocument()`, `getByExternalId()` and `deleteByExternalId()`). They are described in
+the [usage guide](usage.md).
 
 The service id is `Ragbridge\RagbridgeClient`, with `ragbridge.client` as an alias. The
 configuration is also available as the container parameters `ragbridge.base_url` and

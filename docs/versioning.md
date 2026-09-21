@@ -5,11 +5,12 @@ is the public API. Breaking changes to it happen only in a major release.
 
 - **Client:** `Ragbridge\RagbridgeClient` (its constructor, `create()`, `query()`,
   `search()`, `agent()`, `health()`, `readiness()`, `upload()`, `uploadStream()`,
-  `documents()`, `document()` and `deleteDocument()`), the `Ragbridge\SearchMode` enum and
+  `waitUntilProcessed()`, `documents()`, `document()`, `deleteDocument()`, `putDocument()`,
+  `getByExternalId()` and `deleteByExternalId()`), the `Ragbridge\SearchMode` enum and
   `Ragbridge\RetryPolicy`.
 - **Response objects:** the classes in `Ragbridge\Dto` (`Document`, `DocumentStatus`,
   `QueryResult`, `Source`, `RetrievalInfo`, `SearchResult`, `SearchHit`, `AgentResult`,
-  `AgentStep` and `HealthStatus`), their public properties and their `fromArray()`
+  `AgentStep`, `HealthStatus`, `SyncedDocument` and `SyncResult`), their public properties and their `fromArray()`
   factories.
 - **Exceptions:** the classes and the interface in `Ragbridge\Exception`, including
   `statusCode()`, `body()` and `errors()`.
