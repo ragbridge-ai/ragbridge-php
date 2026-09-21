@@ -18,6 +18,8 @@ x-service-environment: &service-environment
   EMBEDDING_DIMENSION: "768"
   CHAT_MODEL: ${CHAT_MODEL:-ollama/llama3.2}
   CHAT_TEMPERATURE: "0"
+  # Text above this many bytes is processed by the worker after the response, see the worker service.
+  ASYNC_PROCESSING_THRESHOLD: ${RAGBRIDGE_INTEGRATION_ASYNC_THRESHOLD:-100000}
 
 services:
   postgres:
@@ -53,7 +55,7 @@ services:
 
   app:
     build:
-      context: https://github.com/ragbridge-ai/ragbridge.git#7ce2c532bf4439e2d3d82f99d94fd58bdfb6700b
+      context: https://github.com/ragbridge-ai/ragbridge.git#481b074d4a306cfdeb4c1b2512855d0e69d37321
     environment: *service-environment
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -74,7 +76,7 @@ services:
   # service answers with 202 and leaves pending until this worker has embedded them.
   worker:
     build:
-      context: https://github.com/ragbridge-ai/ragbridge.git#7ce2c532bf4439e2d3d82f99d94fd58bdfb6700b
+      context: https://github.com/ragbridge-ai/ragbridge.git#481b074d4a306cfdeb4c1b2512855d0e69d37321
     command: ["arq", "ragbridge.worker.WorkerSettings"]
     # The worker exits when it loses its connection to Redis, and comes back with it.
     restart: unless-stopped
