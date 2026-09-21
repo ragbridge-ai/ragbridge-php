@@ -184,7 +184,7 @@ such as articles, products or help pages, identify each document by **your** id 
 record instead. You never have to store the service's ids, an edit replaces the old text
 instead of adding a second document, and every call is safe to repeat.
 
-This needs a service version that supports external ids.
+This needs ragbridge service 1.2.0 or later.
 
 ```php
 use Ragbridge\Dto\SyncResult;
@@ -213,7 +213,8 @@ and no embedding. The title is the document's name in the `filename` of the sour
 answer.
 
 `deleteByExternalId()` does not fail when there is no such document, so repeating a delete
-is safe.
+is safe. That holds for a valid id: an id with characters that are not allowed is a
+`ValidationException` (HTTP 422), as it is for the other two calls.
 
 ### What happened
 
@@ -245,10 +246,11 @@ necessarily the same wall-clock time.
 The id is 1 to 255 characters from `A-Z a-z 0-9 . _ : @ -`, starts with a letter or a digit,
 is case-sensitive and unique per tenant. A slash is not allowed. The client encodes the id
 for you (`article:42` is sent as `article%3A42`). It refuses an empty id, an id with a slash
-and `.` or `..` before sending anything and raises an `InvalidArgumentException`, because
-the service would answer those with a redirect or a 404 that does not say what is wrong.
-For every other id the service decides, and answers with a `ValidationException` that names
-the id.
+and `.` or `..` before sending anything and raises an `InvalidArgumentException`. The service
+does not answer those with a validation error: an encoded slash (`%2F`) is decoded before the
+request is routed, so it gets a **404**, not a 422, and an empty id is not routed at all.
+`.` and `..` are removed from a path by HTTP clients. For every other id the service decides,
+and answers with a `ValidationException` (HTTP 422) that names the id.
 
 ### Metadata
 
@@ -292,6 +294,7 @@ the new one is ready, and stays if the new one fails.
 | Exception                       | Meaning                                                         | What to do                         |
 | ------------------------------- | --------------------------------------------------------------- | ---------------------------------- |
 | `ValidationException` (422)     | A value is not allowed; `errors()` names the field              | Fix the value. Sending it again does not help |
+| `RequestFailedException` (413)  | The text is over the service's size limit, 10 MB by default     | Send less text                     |
 | `ConflictException` (409)       | The request lost a race with a delete                           | Send it again                      |
 | `ServiceUnavailableException` (503) | The service cannot reach its job queue; it marked the document as failed | Send the same record again later |
 

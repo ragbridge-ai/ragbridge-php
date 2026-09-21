@@ -13,7 +13,8 @@ use Ragbridge\Internal\Payload;
  *
  * A document is either an upload, or it is identified by an id of the application that owns
  * the record it was made from, its external id. The last four properties are only filled by
- * a service that supports external ids; against an older one they keep their defaults.
+ * a service that supports external ids (ragbridge service 1.2.0 or later); against an older
+ * one they keep their defaults.
  *
  * Wire format:
  *
@@ -34,8 +35,11 @@ final readonly class Document
 {
     /**
      * @param string|null $externalId the application's own id, null for an uploaded file
-     * @param array<array-key, mixed> $metadata data stored with the document, empty when there is none
-     * @param DateTimeImmutable|null $sourceUpdatedAt when the record was last changed in the application
+     * @param array<array-key, mixed> $metadata data stored with the document, empty when there is
+     *                                          none; it has the values that were sent, but the
+     *                                          service does not keep the order of the keys
+     * @param DateTimeImmutable|null $sourceUpdatedAt when the record was last changed in the
+     *                                                application, in UTC whatever time zone was sent
      * @param DateTimeImmutable|null $updatedAt when the service last changed the document
      */
     public function __construct(

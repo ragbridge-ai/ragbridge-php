@@ -344,11 +344,14 @@ class RagbridgeClient
      * Saves the current state of a record of your application as a document, identified by
      * the id you give it. The document is created, or replaced when it exists.
      *
+     * This needs ragbridge service 1.2.0 or later.
+     *
      * Send the whole current state of the record every time: a call that is repeated, or
      * that arrives twice, does no harm. The service compares the text by its hash, so a
      * record that did not change costs one lookup and no embedding, and its result is
      * {@see SyncResult::Unchanged}. The metadata is part of the state: metadata that is not
-     * sent is removed from the document.
+     * sent, or is empty, is removed from the document. The service returns the metadata with
+     * the values that were sent, but does not keep the order of the keys.
      *
      * Large text is processed by a worker after the response. The result is then queued
      * ({@see SyncedDocument::isQueued()}) and the document is pending: use
@@ -361,9 +364,11 @@ class RagbridgeClient
      *
      * @param string $externalId your id for the record: 1 to 255 letters, digits and the
      *                           characters . _ : @ - starting with a letter or a digit; it
-     *                           is case-sensitive and cannot contain a slash
+     *                           is case-sensitive and cannot contain a slash. The service
+     *                           would answer an encoded slash with 404, so it is refused here
      * @param string $title name of the document, 1 to 500 characters; sources show it as the file name
-     * @param string $content the text, which must not be blank
+     * @param string $content the text, which must not be blank and at most 10 MB (the service's
+     *                        limit unless it is configured otherwise)
      * @param array<array-key, mixed> $metadata data stored with the document and returned
      *                                          with it, a map with at most 16 KB when encoded;
      *                                          it is not searched
@@ -373,6 +378,7 @@ class RagbridgeClient
      *                                  metadata is a list, or when a value cannot be encoded as JSON
      * @throws Exception\ValidationException when the service rejects a value, for example an id
      *                                       with characters that are not allowed
+     * @throws Exception\RequestFailedException with status 413 when the text is over the service's size limit
      * @throws Exception\ConflictException when the request lost a race with a delete; send it again
      * @throws Exception\ServiceUnavailableException when the service cannot reach its job queue; send it again
      * @throws Exception\RagbridgeException
@@ -414,7 +420,10 @@ class RagbridgeClient
     /**
      * Fetches the document that was saved with an external id.
      *
+     * This needs ragbridge service 1.2.0 or later.
+     *
      * @throws NotFoundException when there is no document with this id
+     * @throws Exception\ValidationException when the id has characters that are not allowed
      * @throws InvalidArgumentException when the id cannot be used in a URL path
      * @throws Exception\RagbridgeException
      */
@@ -429,10 +438,15 @@ class RagbridgeClient
      * Deletes the document that was saved with an external id, together with everything
      * derived from it.
      *
+     * This needs ragbridge service 1.2.0 or later.
+     *
      * This does not fail when there is no such document: the service answers the same for a
      * document that was deleted and for one that never existed, so repeating a delete is safe.
+     * That holds for a valid id. An id with characters that are not allowed is a validation
+     * error, as it is for the other calls.
      *
      * @throws InvalidArgumentException when the id cannot be used in a URL path
+     * @throws Exception\ValidationException when the id has characters that are not allowed
      * @throws Exception\RagbridgeException
      */
     public function deleteByExternalId(string $externalId): void
@@ -468,9 +482,10 @@ class RagbridgeClient
      * The path of a document by its external id, with the id encoded.
      *
      * Only what cannot be sent to the service as a path is refused here; the service decides
-     * which other ids are valid. An empty id is a redirect to another route, an encoded slash
-     * is turned into a slash before the service routes the request and is answered with 404,
-     * and HTTP clients remove the segments "." and ".." from a path.
+     * which other ids are valid, and answers with a validation error. An empty id is not
+     * routed (the service redirects to another path), an encoded slash is turned into a slash
+     * before the service routes the request and is answered with 404, not 422, and HTTP
+     * clients remove the segments "." and ".." from a path.
      *
      * @throws InvalidArgumentException
      */

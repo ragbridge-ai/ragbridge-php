@@ -9,8 +9,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- Documents identified by an id of your application, for a service version that supports
-  external ids: `putDocument()` saves the current state of a record, `getByExternalId()`
+- Documents identified by an id of your application, which need ragbridge service 1.2.0 or
+  later: `putDocument()` saves the current state of a record, `getByExternalId()`
   fetches it and `deleteByExternalId()` removes it. `putDocument()` returns a
   `SyncedDocument` with a `SyncResult` (created, replaced, updated, unchanged or stale), the
   document and the HTTP status.

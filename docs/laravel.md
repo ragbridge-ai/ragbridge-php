@@ -94,7 +94,8 @@ $result = Ragbridge::query('How many days of leave do employees get?');
 Besides `query()` and the document methods, the client can search without generating an
 answer (`search()`), run a multi-step question (`agent()`), check the service
 (`health()` and `readiness()`) and keep documents in step with your records by your own
-ids (`putDocument()`, `getByExternalId()` and `deleteByExternalId()`). They are described in
+ids (`putDocument()`, `getByExternalId()` and `deleteByExternalId()`, which need service 1.2.0
+or later). They are described in
 the [usage guide](usage.md). For example, from an observer or a queued job:
 
 ```php

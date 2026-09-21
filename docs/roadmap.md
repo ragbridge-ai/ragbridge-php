@@ -26,7 +26,7 @@ transport, typed responses, error handling and framework wiring.
 - **Documents by external id.** Client methods to save, fetch and delete a document by the id
   that your application uses for the record, with a typed result, a helper that waits for
   large text to be processed, and separate exceptions for a conflict and an unavailable
-  service. They need a service version that supports external ids.
+  service. They need ragbridge service 1.2.0 or later.
 
 ## Planned
 
