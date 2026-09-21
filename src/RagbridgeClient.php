@@ -46,9 +46,11 @@ class RagbridgeClient
 {
     private readonly string $baseUrl;
 
+    private readonly ?string $apiKey;
+
     /**
      * @param string $baseUrl root URL of the service, for example http://localhost:8000
-     * @param string|null $apiKey sent as a bearer token when set
+     * @param string|null $apiKey sent as a bearer token; null or an empty string means no key
      *
      * @throws InvalidArgumentException when the base URL is not an absolute http(s) URL
      */
@@ -57,7 +59,7 @@ class RagbridgeClient
         private readonly RequestFactoryInterface $requestFactory,
         private readonly StreamFactoryInterface $streamFactory,
         string $baseUrl,
-        private readonly ?string $apiKey = null,
+        ?string $apiKey = null,
     ) {
         $parts = parse_url($baseUrl);
 
@@ -73,6 +75,7 @@ class RagbridgeClient
         }
 
         $this->baseUrl = rtrim($baseUrl, '/');
+        $this->apiKey = $apiKey === '' ? null : $apiKey;
     }
 
     /**

@@ -41,8 +41,7 @@ final class RagbridgeServiceProvider extends ServiceProvider
                 throw new InvalidArgumentException('The ragbridge.api_key configuration value must be a string or null.');
             }
 
-            // An empty environment variable means "no key".
-            return RagbridgeClient::create($baseUrl, $apiKey === '' ? null : $apiKey);
+            return RagbridgeClient::create($baseUrl, $apiKey);
         });
 
         $this->app->alias(RagbridgeClient::class, 'ragbridge');
