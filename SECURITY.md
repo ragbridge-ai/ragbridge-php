@@ -2,9 +2,13 @@
 
 ## Supported versions
 
-The package is in development and has no stable release yet. Security fixes are applied to
-the latest version on the `main` branch. Once stable releases exist, this section will list
-the supported release lines.
+| Version | Supported |
+| ------- | --------- |
+| 1.x     | Yes       |
+| < 1.0   | No        |
+
+Security fixes are released in the latest 1.x version. Older 1.x releases do not receive
+separate patches, so upgrade to the latest release to get a fix.
 
 ## Reporting a vulnerability
 
