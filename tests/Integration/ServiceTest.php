@@ -522,7 +522,9 @@ describe('documents identified by an external id', function (): void {
                 ->and($created->result)->toBe(SyncResult::Created)
                 ->and($created->document->status)->toBe(DocumentStatus::Pending);
 
-            $document = $client->waitUntilProcessed($created->document, 90);
+            // Waits with waitUntilProcessed(), and sends the record again when the model that
+            // embeds the text failed, see Integration::settle().
+            $document = Integration::settle($client, $id, "Manual {$token}", $text, $created->document);
 
             // The error first, so that a failure says what the service reported.
             expect($document->error)->toBeNull()
@@ -543,10 +545,90 @@ describe('documents identified by an external id', function (): void {
                 ->and($replaced->isQueued())->toBeTrue()
                 ->and($replaced->document->id)->toBe($created->document->id);
 
-            expect($client->waitUntilProcessed($replaced->document, 90)->status)->toBe(DocumentStatus::Ready);
+            $replacedText = $text . "\nAn addition about the {$token} chimney.";
+            $processed = Integration::settle($client, $id, "Manual {$token}", $replacedText, $replaced->document);
+
+            expect($processed->error)->toBeNull()
+                ->and($processed->status)->toBe(DocumentStatus::Ready);
         } finally {
             $client->deleteByExternalId($id);
         }
+    });
+
+    it('keeps a document ready when text, other text and the first text are sent before the worker runs', function (): void {
+        // The worker used to queue two jobs for the first text, and the second one marked the
+        // healthy document as failed ("document has no raw_content to process") because the
+        // first had already stored the text and cleared it.
+        //
+        // This test checks the outcome, not the race. The service's worker runs the jobs of a
+        // small burst at the same time, so both jobs read the text before either has finished,
+        // and this sequence passed against the version that had the bug, too. The race needs a
+        // worker with a backlog, in which the second job starts after the first has finished.
+        // A failure of the model that embeds the text is answered by sending the record again;
+        // the error of the bug is not, see Integration::settle().
+        $client = Integration::client();
+        $token = Integration::token();
+        $id = "flip:{$token}";
+        $x = Integration::largeText("alpha-{$token}");
+        $y = Integration::largeText("omega-{$token}");
+
+        try {
+            $first = $client->putDocument($id, "Manual {$token}", $x);
+            $second = $client->putDocument($id, "Manual {$token}", $y);
+            $third = $client->putDocument($id, "Manual {$token}", $x);
+
+            expect(strlen($x))->toBeGreaterThan(140_000)
+                ->and($first->statusCode)->toBe(202)
+                ->and($first->result)->toBe(SyncResult::Created)
+                ->and($second->statusCode)->toBe(202)
+                ->and($second->result)->toBe(SyncResult::Replaced)
+                ->and($third->statusCode)->toBe(202)
+                ->and($third->result)->toBe(SyncResult::Replaced)
+                ->and($second->document->id)->toBe($first->document->id)
+                ->and($third->document->id)->toBe($first->document->id);
+
+            $document = Integration::settle($client, $id, "Manual {$token}", $x, $third->document);
+
+            // The error first, so that a failure says what the service reported.
+            expect($document->error)->toBeNull()
+                ->and($document->status)->toBe(DocumentStatus::Ready)
+                ->and($document->id)->toBe($first->document->id);
+
+            // The text that is stored is the last one that was sent.
+            $found = implode("\n", array_map(
+                static fn(SearchHit $hit): string => $hit->content,
+                $client->search("manual alpha-{$token} boiler house maintenance", topK: 5)->results,
+            ));
+            $wrong = implode("\n", array_map(
+                static fn(SearchHit $hit): string => $hit->content,
+                $client->search("manual omega-{$token} boiler house maintenance", topK: 5)->results,
+            ));
+
+            expect($found)->toContain("alpha-{$token}")
+                ->and($found)->not->toContain("omega-{$token}")
+                ->and($wrong)->not->toContain("omega-{$token}");
+
+            // The same text again changes nothing, and the document is still ready.
+            $again = $client->putDocument($id, "Manual {$token}", $x);
+
+            expect($again->result)->toBe(SyncResult::Unchanged)
+                ->and($again->statusCode)->toBe(200)
+                ->and($again->document->status)->toBe(DocumentStatus::Ready)
+                ->and($client->getByExternalId($id)->error)->toBeNull();
+        } finally {
+            $client->deleteByExternalId($id);
+        }
+    });
+
+    it('rejects text over the size limit as a request that failed, not as a validation error', function (): void {
+        $client = Integration::client();
+        $id = 'huge:' . Integration::token();
+
+        $e = Thrown::by(fn() => $client->putDocument($id, 'Too large', str_repeat('a', 10_000_001)), RequestFailedException::class);
+
+        expect($e->statusCode())->toBe(413)
+            ->and($e)->not->toBeInstanceOf(ValidationException::class)
+            ->and(fn() => $client->getByExternalId($id))->toThrow(NotFoundException::class);
     });
 
     it('does not disturb uploading a file', function (): void {
