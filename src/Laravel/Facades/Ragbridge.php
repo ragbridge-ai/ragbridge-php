@@ -12,6 +12,7 @@ use Ragbridge\RagbridgeClient;
  *
  * @method static \Ragbridge\Dto\QueryResult query(string $question, int $topK = 5, ?\Ragbridge\SearchMode $mode = null, bool $explain = false)
  * @method static \Ragbridge\Dto\SearchResult search(string $query, int $topK = 5, ?\Ragbridge\SearchMode $mode = null, bool $explain = false)
+ * @method static \Ragbridge\Dto\AgentResult agent(string $question, ?int $maxSteps = null)
  * @method static \Ragbridge\Dto\Document upload(string $path, ?string $filename = null, ?string $contentType = null)
  * @method static \Ragbridge\Dto\Document uploadStream(\Psr\Http\Message\StreamInterface $stream, string $filename, ?string $contentType = null)
  * @method static list<\Ragbridge\Dto\Document> documents()

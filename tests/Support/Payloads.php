@@ -106,4 +106,34 @@ final class Payloads
             ...$overrides,
         ];
     }
+
+    /**
+     * @param array<string, mixed> $overrides
+     *
+     * @return array<string, mixed>
+     */
+    public static function agentStep(array $overrides = []): array
+    {
+        return [
+            'query' => 'How much leave do employees get?',
+            'results' => 4,
+            ...$overrides,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $overrides
+     *
+     * @return array<string, mixed>
+     */
+    public static function agentResult(array $overrides = []): array
+    {
+        return [
+            'answer' => 'Employees receive 25 days of leave.',
+            'sources' => [self::source()],
+            'steps' => [self::agentStep()],
+            'step_count' => 1,
+            ...$overrides,
+        ];
+    }
 }

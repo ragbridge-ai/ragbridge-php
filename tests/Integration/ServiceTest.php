@@ -191,3 +191,39 @@ it('rejects an invalid search with the fields that are wrong', function (): void
 
     expect($locations)->toContain('body.top_k');
 });
+
+it('answers with the agent and reports the steps it took', function (): void {
+    $client = Integration::client();
+    $token = Integration::token();
+    $stream = Fixtures::factory()->createStream("The access phrase for the {$token} cellar is silver-anchor.\n");
+
+    $uploaded = $client->uploadStream($stream, "cellar-{$token}.txt");
+
+    try {
+        Integration::waitUntilProcessed($client, $uploaded);
+
+        $result = $client->agent("What is the access phrase for the {$token} cellar?", maxSteps: 2);
+
+        $ours = array_filter(
+            $result->sources,
+            static fn(Source $source): bool => $source->documentId === $uploaded->id,
+        );
+
+        expect($result->answer)->not->toBe('')
+            ->and($ours)->not->toBeEmpty()
+            ->and($result->steps)->not->toBeEmpty()
+            ->and($result->steps[0]->query)->toBeString()
+            ->and($result->stepCount)->toBeGreaterThanOrEqual(1)
+            ->and($result->stepCount)->toBeLessThanOrEqual(2);
+    } finally {
+        $client->deleteDocument($uploaded->id);
+    }
+});
+
+it('rejects an invalid agent step limit', function (): void {
+    $e = Thrown::by(fn() => Integration::client()->agent('anything', maxSteps: 0), ValidationException::class);
+
+    $locations = array_map(static fn(array $error): string => implode('.', $error['loc']), $e->errors());
+
+    expect($locations)->toContain('body.max_steps');
+});

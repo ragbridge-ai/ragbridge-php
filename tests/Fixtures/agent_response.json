@@ -1,0 +1,32 @@
+{
+  "answer": "Employees receive 25 days of paid leave per year and may work remotely up to three days a week.",
+  "sources": [
+    {
+      "document_id": "3f2b8c1e-5d4a-4b7e-9c61-0a1b2c3d4e5f",
+      "filename": "handbook.pdf",
+      "chunk_index": 3,
+      "snippet": "Employees accrue 25 days of paid leave per calendar year.",
+      "score": 0.87,
+      "context_only": false
+    },
+    {
+      "document_id": "3f2b8c1e-5d4a-4b7e-9c61-0a1b2c3d4e5f",
+      "filename": "handbook.pdf",
+      "chunk_index": 7,
+      "snippet": "Remote work needs manager approval.",
+      "score": 0.61,
+      "context_only": false
+    }
+  ],
+  "steps": [
+    {
+      "query": "How many days of leave do employees get?",
+      "results": 5
+    },
+    {
+      "query": "How many remote work days are allowed?",
+      "results": 3
+    }
+  ],
+  "step_count": 2
+}

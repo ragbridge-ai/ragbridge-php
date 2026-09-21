@@ -16,6 +16,7 @@ use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Http\Message\StreamInterface;
+use Ragbridge\Dto\AgentResult;
 use Ragbridge\Dto\Document;
 use Ragbridge\Dto\QueryResult;
 use Ragbridge\Dto\SearchResult;
@@ -143,6 +144,29 @@ class RagbridgeClient
         $body = ['query' => $query, ...$this->retrievalOptions($topK, $mode, $explain)];
 
         return $this->hydrate(SearchResult::fromArray(...), $this->object($this->send('POST', '/search', $body)));
+    }
+
+    /**
+     * Answers a question that may need several searches.
+     *
+     * The service searches up to $maxSteps times, then answers from everything it found.
+     * The result lists the searches it ran, so a wrong answer can be traced back to what
+     * was looked for. The call is synchronous and, with a local model, can take a while:
+     * give your HTTP client a generous timeout.
+     *
+     * @param int|null $maxSteps most searches to run, the service default when null
+     *
+     * @throws Exception\RagbridgeException
+     */
+    public function agent(string $question, ?int $maxSteps = null): AgentResult
+    {
+        $body = ['question' => $question];
+
+        if ($maxSteps !== null) {
+            $body['max_steps'] = $maxSteps;
+        }
+
+        return $this->hydrate(AgentResult::fromArray(...), $this->object($this->send('POST', '/agent', $body)));
     }
 
     /**
