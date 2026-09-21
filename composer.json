@@ -34,20 +34,20 @@
     "require-dev": {
         "laravel/pint": "^1.30",
         "nyholm/psr7": "^1.8",
-        "orchestra/testbench": "^9.0||^10.0",
+        "orchestra/testbench": "^10.0||^11.0",
         "pestphp/pest": "^3.8",
         "php-http/mock-client": "^1.6",
         "phpstan/phpstan": "^2.2",
         "phpstan/phpstan-strict-rules": "^2.0",
-        "symfony/config": "^6.4||^7.0",
-        "symfony/dependency-injection": "^6.4||^7.0",
-        "symfony/http-client": "^6.4||^7.0",
-        "symfony/http-kernel": "^6.4||^7.0"
+        "symfony/config": "^6.4||^7.0||^8.0",
+        "symfony/dependency-injection": "^6.4||^7.0||^8.0",
+        "symfony/http-client": "^6.4||^7.0||^8.0",
+        "symfony/http-kernel": "^6.4||^7.0||^8.0"
     },
     "suggest": {
-        "illuminate/support": "Required to use the Laravel integration (^11.0 or ^12.0)",
-        "symfony/framework-bundle": "Required to use the Symfony integration (^6.4 or ^7.0)",
-        "symfony/http-client": "Lets the Symfony integration send requests through the application's HTTP client (^6.4 or ^7.0)"
+        "illuminate/support": "Required to use the Laravel integration (^12.0 or ^13.0)",
+        "symfony/framework-bundle": "Required to use the Symfony integration (^6.4, ^7.0 or ^8.0)",
+        "symfony/http-client": "Lets the Symfony integration send requests through the application's HTTP client (^6.4, ^7.0 or ^8.0)"
     },
     "scripts": {
         "stan": "phpstan analyse --memory-limit=1G",
@@ -57,7 +57,9 @@
             "@stan",
             "@test"
         ],
-        "test": "pest"
+        "test": "pest",
+        "test:laravel": "pest --testsuite=Unit,Laravel",
+        "test:symfony": "pest --testsuite=Unit,Symfony"
     },
     "extra": {
         "laravel": {

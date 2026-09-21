@@ -195,7 +195,7 @@ framework installed, and the core never depends on either
 
 ### Laravel
 
-Supported: Laravel 11 and 12. The service provider and the `Ragbridge` alias are
+Supported: Laravel 12 and 13. The service provider and the `Ragbridge` alias are
 discovered automatically, so installing the package is enough. Set the connection in
 `.env`:
 
@@ -267,7 +267,7 @@ Ragbridge::shouldReceive('query')
 
 ### Symfony
 
-Supported: Symfony 6.4 and 7. Install the package together with the HTTP client and a PSR-17
+Supported: Symfony 6.4, 7 and 8. Install the package together with the HTTP client and a PSR-17
 implementation:
 
 ```bash
