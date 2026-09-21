@@ -18,6 +18,7 @@ use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Http\Message\StreamInterface;
 use Ragbridge\Dto\Document;
 use Ragbridge\Dto\QueryResult;
+use Ragbridge\Dto\SearchResult;
 use Ragbridge\Exception\ApiException;
 use Ragbridge\Exception\AuthenticationException;
 use Ragbridge\Exception\InvalidResponseException;
@@ -116,17 +117,32 @@ class RagbridgeClient
         ?SearchMode $mode = null,
         bool $explain = false,
     ): QueryResult {
-        $body = ['question' => $question, 'top_k' => $topK];
-
-        if ($mode !== null) {
-            $body['mode'] = $mode->value;
-        }
-
-        if ($explain) {
-            $body['explain'] = true;
-        }
+        $body = ['question' => $question, ...$this->retrievalOptions($topK, $mode, $explain)];
 
         return $this->hydrate(QueryResult::fromArray(...), $this->object($this->send('POST', '/query', $body)));
+    }
+
+    /**
+     * Searches the documents and returns the matching chunks, without generating an answer.
+     *
+     * It runs the same retrieval as {@see query()} and stops before generation. Use it when
+     * your application reasons over the chunks itself.
+     *
+     * @param int $topK number of chunks to retrieve, the service accepts 1 to 20
+     * @param SearchMode|null $mode retrieval strategy, the service default when null
+     * @param bool $explain include retrieval details in each hit
+     *
+     * @throws Exception\RagbridgeException
+     */
+    public function search(
+        string $query,
+        int $topK = 5,
+        ?SearchMode $mode = null,
+        bool $explain = false,
+    ): SearchResult {
+        $body = ['query' => $query, ...$this->retrievalOptions($topK, $mode, $explain)];
+
+        return $this->hydrate(SearchResult::fromArray(...), $this->object($this->send('POST', '/search', $body)));
     }
 
     /**
@@ -215,6 +231,27 @@ class RagbridgeClient
     public function deleteDocument(string $id): void
     {
         $this->send('DELETE', '/documents/' . rawurlencode($id));
+    }
+
+    /**
+     * The request fields that query and search have in common. Optional fields are left out
+     * unless they are set, so the service applies its own defaults.
+     *
+     * @return array<string, mixed>
+     */
+    private function retrievalOptions(int $topK, ?SearchMode $mode, bool $explain): array
+    {
+        $options = ['top_k' => $topK];
+
+        if ($mode !== null) {
+            $options['mode'] = $mode->value;
+        }
+
+        if ($explain) {
+            $options['explain'] = true;
+        }
+
+        return $options;
     }
 
     /**

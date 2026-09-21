@@ -1,0 +1,18 @@
+{
+  "results": [
+    {
+      "document_id": "3f2b8c1e-5d4a-4b7e-9c61-0a1b2c3d4e5f",
+      "filename": "handbook.pdf",
+      "chunk_index": 3,
+      "content": "Employees accrue 25 days of paid leave per calendar year.\nUnused days can be carried over until 31 March.",
+      "score": 0.0328
+    },
+    {
+      "document_id": "3f2b8c1e-5d4a-4b7e-9c61-0a1b2c3d4e5f",
+      "filename": "handbook.pdf",
+      "chunk_index": 7,
+      "content": "Remote work needs manager approval.",
+      "score": 0.0161
+    }
+  ]
+}
