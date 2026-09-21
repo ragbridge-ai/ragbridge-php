@@ -30,7 +30,8 @@ generation all happen in the service.
 ## Requirements
 
 - PHP 8.2 or later
-- A running ragbridge service and an API key for it (see the [quick start](docs/quickstart.md))
+- A running ragbridge service and an API key for it (see the [quick start](docs/quickstart.md)).
+  Documents identified by an id of your application need service 1.2.0 or later.
 - A PSR-18 HTTP client and PSR-17 factories, for example Guzzle or Symfony HttpClient with
   `nyholm/psr7`. Laravel already includes one.
 

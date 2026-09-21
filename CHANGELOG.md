@@ -7,6 +7,33 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-22
+
+Adds documents identified by an id of your application, for keeping the service in step with
+your records. It needs ragbridge service 1.2.0 or later. Existing code behaves as before.
+
+### Added
+
+- Documents identified by an id of your application, which need ragbridge service 1.2.0 or
+  later: `putDocument()` saves the current state of a record, `getByExternalId()`
+  fetches it and `deleteByExternalId()` removes it. `putDocument()` returns a
+  `SyncedDocument` with a `SyncResult` (created, replaced, updated, unchanged or stale), the
+  document and the HTTP status.
+- `waitUntilProcessed()`, which waits until a pending document is ready or failed, and the
+  `ProcessingTimeoutException` that it raises when the time runs out.
+- `Document` has the new properties `externalId`, `metadata`, `sourceUpdatedAt` and
+  `updatedAt`. They keep their defaults when the service does not send them.
+- `ConflictException` (HTTP 409) and `ServiceUnavailableException` (HTTP 503).
+
+### Changed
+
+- A 409 and a 503 are now reported as `ConflictException` and `ServiceUnavailableException`.
+  They extend `RequestFailedException` and `ServerException`, which were thrown for these
+  statuses before, so existing `catch` blocks keep working. Those two classes are no longer
+  `final`.
+- A retry policy also repeats `PUT` requests by default, because `PUT` is idempotent. The
+  client did not send any before.
+
 ## [1.1.0] - 2026-09-21
 
 Adds the remaining service endpoints and optional retries. There are no breaking changes:
@@ -94,6 +121,7 @@ releases.
   Actions, roadmap, architecture decision records, contributing guide, security policy and
   code of conduct.
 
-[Unreleased]: https://github.com/ragbridge-ai/ragbridge-php/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/ragbridge-ai/ragbridge-php/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/ragbridge-ai/ragbridge-php/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/ragbridge-ai/ragbridge-php/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/ragbridge-ai/ragbridge-php/releases/tag/v1.0.0

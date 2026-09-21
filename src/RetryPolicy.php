@@ -18,7 +18,7 @@ use InvalidArgumentException;
  * Other 4xx responses, such as validation and authentication errors, and 500 responses are
  * never retried: sending the same request again gives the same answer.
  *
- * Only idempotent methods (GET and DELETE among the ones the client uses) are retried by
+ * Only idempotent methods (GET, PUT and DELETE among the ones the client uses) are retried by
  * default. A POST is sent again only when $retryPost is set, because the service may have
  * processed a request whose response was lost.
  *

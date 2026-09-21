@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Ragbridge;
 
 use Closure;
+use DateTimeInterface;
 use Http\Discovery\Psr17FactoryDiscovery;
 use Http\Discovery\Psr18ClientDiscovery;
 use InvalidArgumentException;
@@ -18,15 +19,20 @@ use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Http\Message\StreamInterface;
 use Ragbridge\Dto\AgentResult;
 use Ragbridge\Dto\Document;
+use Ragbridge\Dto\DocumentStatus;
 use Ragbridge\Dto\HealthStatus;
 use Ragbridge\Dto\QueryResult;
 use Ragbridge\Dto\SearchResult;
+use Ragbridge\Dto\SyncedDocument;
 use Ragbridge\Exception\ApiException;
 use Ragbridge\Exception\AuthenticationException;
+use Ragbridge\Exception\ConflictException;
 use Ragbridge\Exception\InvalidResponseException;
 use Ragbridge\Exception\NotFoundException;
+use Ragbridge\Exception\ProcessingTimeoutException;
 use Ragbridge\Exception\RequestFailedException;
 use Ragbridge\Exception\ServerException;
+use Ragbridge\Exception\ServiceUnavailableException;
 use Ragbridge\Exception\TransportException;
 use Ragbridge\Exception\ValidationException;
 use Ragbridge\Internal\MultipartFile;
@@ -251,6 +257,52 @@ class RagbridgeClient
     }
 
     /**
+     * Waits until the service has finished processing a document, and returns it as it is then.
+     *
+     * A document is pending or processing while the service works on it in the background,
+     * which it does for a large upload and for large text saved with
+     * {@see putDocument()}. The document is fetched again, at the interval, until it is ready
+     * or failed. A failed document is returned, not thrown: check its status and its error.
+     * For a document saved by its external id, sending the same record again retries it.
+     *
+     * The waiting time is counted from the pauses, so the time spent on the requests comes on
+     * top of it. The pauses go through the same function as those of the retries.
+     *
+     * @param int $timeoutSeconds how long to wait at most; with 0 a document that is still being
+     *                            processed is reported at once, without fetching it again
+     * @param int $intervalMs pause between two checks, in milliseconds
+     *
+     * @throws ProcessingTimeoutException when the document is still being processed after the timeout
+     * @throws NotFoundException when the document is deleted while it is waited for
+     * @throws InvalidArgumentException when the timeout is negative or the interval is below 1 ms
+     * @throws Exception\RagbridgeException
+     */
+    public function waitUntilProcessed(Document $document, int $timeoutSeconds = 60, int $intervalMs = 1000): Document
+    {
+        if ($timeoutSeconds < 0 || $intervalMs < 1) {
+            throw new InvalidArgumentException(sprintf(
+                'The timeout cannot be negative and the interval must be at least 1 ms, %d s and %d ms given.',
+                $timeoutSeconds,
+                $intervalMs,
+            ));
+        }
+
+        $waitedMs = 0;
+
+        while (in_array($document->status, [DocumentStatus::Pending, DocumentStatus::Processing], true)) {
+            if ($waitedMs >= $timeoutSeconds * 1000) {
+                throw new ProcessingTimeoutException($document, $timeoutSeconds);
+            }
+
+            ($this->sleep)($intervalMs);
+            $waitedMs += $intervalMs;
+            $document = $this->document($document->id);
+        }
+
+        return $document;
+    }
+
+    /**
      * Lists the documents stored in the service.
      *
      * @return list<Document>
@@ -289,6 +341,120 @@ class RagbridgeClient
     }
 
     /**
+     * Saves the current state of a record of your application as a document, identified by
+     * the id you give it. The document is created, or replaced when it exists.
+     *
+     * This needs ragbridge service 1.2.0 or later.
+     *
+     * Send the whole current state of the record every time: a call that is repeated, or
+     * that arrives twice, does no harm. The service compares the text by its hash, so a
+     * record that did not change costs one lookup and no embedding, and its result is
+     * {@see SyncResult::Unchanged}. The metadata is part of the state: metadata that is not
+     * sent, or is empty, is removed from the document. The service returns the metadata with
+     * the values that were sent, but does not keep the order of the keys.
+     *
+     * Large text is processed by a worker after the response. The result is then queued
+     * ({@see SyncedDocument::isQueued()}) and the document is pending: use
+     * {@see waitUntilProcessed()} to wait for it. Send the same record again to retry a
+     * document whose processing failed.
+     *
+     * A record older than the stored one is ignored ({@see SyncResult::Stale}) when both
+     * carry a time. Queues deliver out of order, so send the time the record was last
+     * changed in your application, not the time of this call.
+     *
+     * @param string $externalId your id for the record: 1 to 255 letters, digits and the
+     *                           characters . _ : @ - starting with a letter or a digit; it
+     *                           is case-sensitive and cannot contain a slash. The service
+     *                           would answer an encoded slash with 404, so it is refused here
+     * @param string $title name of the document, 1 to 500 characters; sources show it as the file name
+     * @param string $content the text, which must not be blank and at most 10 MB (the service's
+     *                        limit unless it is configured otherwise)
+     * @param array<array-key, mixed> $metadata data stored with the document and returned
+     *                                          with it, a map with at most 16 KB when encoded;
+     *                                          it is not searched
+     * @param DateTimeInterface|null $sourceUpdatedAt when the record was last changed in your application
+     *
+     * @throws InvalidArgumentException when the id cannot be used in a URL path, when the
+     *                                  metadata is a list, or when a value cannot be encoded as JSON
+     * @throws Exception\ValidationException when the service rejects a value, for example an id
+     *                                       with characters that are not allowed
+     * @throws Exception\RequestFailedException with status 413 when the text is over the service's size limit
+     * @throws Exception\ConflictException when the request lost a race with a delete; send it again
+     * @throws Exception\ServiceUnavailableException when the service cannot reach its job queue; send it again
+     * @throws Exception\RagbridgeException
+     */
+    public function putDocument(
+        string $externalId,
+        string $title,
+        string $content,
+        array $metadata = [],
+        ?DateTimeInterface $sourceUpdatedAt = null,
+    ): SyncedDocument {
+        $path = $this->externalPath($externalId);
+
+        $body = ['title' => $title, 'content' => $content];
+
+        // Empty metadata is left out. An empty PHP array would be encoded as the JSON list [],
+        // which the service rejects, and metadata that is not sent is the same as {}.
+        if ($metadata !== []) {
+            if (array_is_list($metadata)) {
+                throw new InvalidArgumentException('The metadata must be a map with string keys, which is a JSON object; a list is a JSON array.');
+            }
+
+            $body['metadata'] = $metadata;
+        }
+
+        if ($sourceUpdatedAt !== null) {
+            // With microseconds, so that two changes within the same second keep their order.
+            $body['source_updated_at'] = $sourceUpdatedAt->format('Y-m-d\TH:i:s.uP');
+        }
+
+        [$status, $data] = $this->exchange('PUT', $path, $body);
+
+        return $this->hydrate(
+            static fn(array $payload): SyncedDocument => SyncedDocument::fromArray($payload, $status),
+            $this->object($data),
+        );
+    }
+
+    /**
+     * Fetches the document that was saved with an external id.
+     *
+     * This needs ragbridge service 1.2.0 or later.
+     *
+     * @throws NotFoundException when there is no document with this id
+     * @throws Exception\ValidationException when the id has characters that are not allowed
+     * @throws InvalidArgumentException when the id cannot be used in a URL path
+     * @throws Exception\RagbridgeException
+     */
+    public function getByExternalId(string $externalId): Document
+    {
+        $data = $this->send('GET', $this->externalPath($externalId));
+
+        return $this->hydrate(Document::fromArray(...), $this->object($data));
+    }
+
+    /**
+     * Deletes the document that was saved with an external id, together with everything
+     * derived from it.
+     *
+     * This needs ragbridge service 1.2.0 or later.
+     *
+     * This does not fail when there is no such document: the service answers the same for a
+     * document that was deleted and for one that never existed, so repeating a delete is safe.
+     * That holds for a valid id. An id with characters that are not allowed is a validation
+     * error, as it is for the other calls.
+     *
+     * @throws InvalidArgumentException when the id cannot be used in a URL path
+     * @throws Exception\ValidationException when the id has characters that are not allowed
+     * @throws Exception\RagbridgeException
+     */
+    public function deleteByExternalId(string $externalId): void
+    {
+        $this->send('DELETE', $this->externalPath($externalId));
+    }
+
+    /**
      * Checks that the service process is running (liveness). It does not check the database.
      *
      * @throws Exception\RagbridgeException
@@ -310,6 +476,29 @@ class RagbridgeClient
     public function readiness(): HealthStatus
     {
         return $this->hydrate(HealthStatus::fromArray(...), $this->object($this->send('GET', '/health/ready')));
+    }
+
+    /**
+     * The path of a document by its external id, with the id encoded.
+     *
+     * Only what cannot be sent to the service as a path is refused here; the service decides
+     * which other ids are valid, and answers with a validation error. An empty id is redirected
+     * to a path that means something else and gets a misleading error, an encoded slash is turned into a slash
+     * before the service routes the request and is answered with 404, not 422, and HTTP
+     * clients remove the segments "." and ".." from a path.
+     *
+     * @throws InvalidArgumentException
+     */
+    private function externalPath(string $externalId): string
+    {
+        if ($externalId === '' || $externalId === '.' || $externalId === '..' || str_contains($externalId, '/')) {
+            throw new InvalidArgumentException(sprintf(
+                'The external id must not be empty, "." or "..", and must not contain a slash, "%s" given.',
+                $externalId,
+            ));
+        }
+
+        return '/documents/external/' . rawurlencode($externalId);
     }
 
     /**
@@ -336,13 +525,9 @@ class RagbridgeClient
     /**
      * Sends a request and returns the decoded JSON body, or null when the response has none.
      *
-     * When a retry policy applies to the request, a failure that the policy considers
-     * transient is followed by another try, after a pause.
-     *
      * @param array<string, mixed>|null $json request body, encoded as JSON
      * @param StreamInterface|null $stream raw request body, used instead of $json
-     * @param Closure(): void|null $rewind puts $stream back at its start; the request is retried
-     *                                     only when this is given, as the body cannot be sent twice otherwise
+     * @param Closure(): void|null $rewind see exchange()
      *
      * @throws Exception\RagbridgeException
      */
@@ -354,6 +539,33 @@ class RagbridgeClient
         ?string $contentType = null,
         ?Closure $rewind = null,
     ): mixed {
+        return $this->exchange($method, $path, $json, $stream, $contentType, $rewind)[1];
+    }
+
+    /**
+     * Sends a request and returns the HTTP status with the decoded JSON body, which is null
+     * when the response has none.
+     *
+     * When a retry policy applies to the request, a failure that the policy considers
+     * transient is followed by another try, after a pause.
+     *
+     * @param array<string, mixed>|null $json request body, encoded as JSON
+     * @param StreamInterface|null $stream raw request body, used instead of $json
+     * @param Closure(): void|null $rewind puts $stream back at its start; the request is retried
+     *                                     only when this is given, as the body cannot be sent twice otherwise
+     *
+     * @return array{int, mixed} the status, always in the 2xx range, and the decoded body
+     *
+     * @throws Exception\RagbridgeException
+     */
+    private function exchange(
+        string $method,
+        string $path,
+        ?array $json = null,
+        ?StreamInterface $stream = null,
+        ?string $contentType = null,
+        ?Closure $rewind = null,
+    ): array {
         $policy = $this->retryPolicy !== null
             && $this->retryPolicy->appliesTo($method)
             && ($stream === null || $rewind !== null)
@@ -377,7 +589,7 @@ class RagbridgeClient
             $body = (string) $response->getBody();
 
             if ($status >= 200 && $status < 300) {
-                return $body === '' ? null : $this->decode($body);
+                return [$status, $body === '' ? null : $this->decode($body)];
             }
 
             $error = $this->errorFor($status, $this->decodeLeniently($body));
@@ -516,7 +728,9 @@ class RagbridgeClient
         return match (true) {
             $status === 401, $status === 403 => AuthenticationException::fromResponse($status, $body),
             $status === 404 => NotFoundException::fromResponse($status, $body),
+            $status === 409 => ConflictException::fromResponse($status, $body),
             $status === 422 => ValidationException::fromResponse($status, $body),
+            $status === 503 => ServiceUnavailableException::fromResponse($status, $body),
             $status >= 500 => ServerException::fromResponse($status, $body),
             default => RequestFailedException::fromResponse($status, $body),
         };

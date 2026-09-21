@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Ragbridge\Tests\Support;
 
+use Psr\Http\Message\ResponseInterface;
+use RuntimeException;
+
 /**
  * Builders for valid decoded API payloads. Tests override or remove single fields to
  * exercise the failure cases.
@@ -28,6 +31,39 @@ final class Payloads
             'created_at' => '2026-03-14T09:26:53.589793Z',
             ...$overrides,
         ];
+    }
+
+    /**
+     * Decodes JSON the way the client does, so that an empty JSON object becomes an empty array.
+     *
+     * @return array<mixed>
+     */
+    public static function fromJson(string $json): array
+    {
+        $decoded = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+
+        return is_array($decoded) ? $decoded : throw new RuntimeException('The JSON is not an object.');
+    }
+
+    /**
+     * A document as a service with external ids sends it. For an upload, external_id and
+     * source_updated_at are null and metadata is empty.
+     *
+     * @param array<string, mixed> $overrides
+     *
+     * @return array<string, mixed>
+     */
+    public static function externalDocument(array $overrides = []): array
+    {
+        return self::document([
+            'external_id' => 'article:42',
+            'filename' => 'Refund policy',
+            'content_type' => 'text/plain',
+            'metadata' => ['locale' => 'en'],
+            'source_updated_at' => '2026-09-21T10:00:00.123456Z',
+            'updated_at' => '2026-09-21T10:05:00.500000Z',
+            ...$overrides,
+        ]);
     }
 
     /**
@@ -135,5 +171,25 @@ final class Payloads
             'step_count' => 1,
             ...$overrides,
         ];
+    }
+
+    /**
+     * The body of a PUT to /documents/external/{id}.
+     *
+     * @param array<string, mixed> $document overrides for the document
+     *
+     * @return array<string, mixed>
+     */
+    public static function syncResult(string $result = 'created', array $document = []): array
+    {
+        return ['result' => $result, 'document' => self::externalDocument($document)];
+    }
+
+    /**
+     * @param array<string, mixed> $document overrides for the document
+     */
+    public static function syncResponse(int $status, string $result = 'created', array $document = []): ResponseInterface
+    {
+        return Fixtures::response($status, json_encode(self::syncResult($result, $document), JSON_THROW_ON_ERROR));
     }
 }

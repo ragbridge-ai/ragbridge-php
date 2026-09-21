@@ -23,6 +23,10 @@ transport, typed responses, error handling and framework wiring.
 - **Retries with backoff.** Optional, configurable retries of requests that fail for
   transient reasons, with exponential backoff and jitter. Off by default, and POST requests
   are only retried when enabled explicitly ([ADR 0006](adr/0006-retry-policy.md)).
+- **Documents by external id.** Client methods to save, fetch and delete a document by the id
+  that your application uses for the record, with a typed result, a helper that waits for
+  large text to be processed, and separate exceptions for a conflict and an unavailable
+  service. They need ragbridge service 1.2.0 or later.
 
 ## Planned
 
@@ -31,11 +35,10 @@ releases, so none of it breaks the 1.0 API.
 
 - **Queued data sync.** Keep the service in step with application data by indexing
   Eloquent models and Doctrine entities through the framework's queue. The application
-  decides what text is indexed, and creates, updates and deletes are idempotent.
-  *Depends on the service:* this item requires support for external identifiers in the
-  service, that is, creating or replacing a document and deleting it by an identifier
-  chosen by the application. Work on it starts once a released version of the service
-  includes that support.
+  decides what text is indexed, and creates, updates and deletes are idempotent. It builds
+  on the client methods for documents by external id, which are shipped; what remains is
+  the framework part: observers or listeners, queued jobs, the mapping from a model to a
+  document, and their configuration.
 - **Streaming answers.** Receiving an answer while it is generated. *Depends on the
   service,* which does not offer streaming today.
 - **WordPress integration.** Use of the client from WordPress plugins and themes. The core

@@ -18,6 +18,10 @@ use Ragbridge\RagbridgeClient;
  * @method static list<\Ragbridge\Dto\Document> documents()
  * @method static \Ragbridge\Dto\Document document(string $id)
  * @method static void deleteDocument(string $id)
+ * @method static \Ragbridge\Dto\Document waitUntilProcessed(\Ragbridge\Dto\Document $document, int $timeoutSeconds = 60, int $intervalMs = 1000)
+ * @method static \Ragbridge\Dto\SyncedDocument putDocument(string $externalId, string $title, string $content, array<array-key, mixed> $metadata = [], ?\DateTimeInterface $sourceUpdatedAt = null)
+ * @method static \Ragbridge\Dto\Document getByExternalId(string $externalId)
+ * @method static void deleteByExternalId(string $externalId)
  * @method static \Ragbridge\Dto\HealthStatus health()
  * @method static \Ragbridge\Dto\HealthStatus readiness()
  *

@@ -49,7 +49,7 @@ RAGBRIDGE_RETRY_ENABLED=true
 
 They are the `retry` section of `config/ragbridge.php`. A request is repeated after a
 connection error and after HTTP 429, 502, 503 or 504, and never after other 4xx errors or
-HTTP 500. Only GET and DELETE requests are repeated unless `RAGBRIDGE_RETRY_POST` is on.
+HTTP 500. Only GET, PUT and DELETE requests are repeated unless `RAGBRIDGE_RETRY_POST` is on.
 The [usage guide](usage.md#retry-failed-requests) explains the rules, and
 [ADR 0006](adr/0006-retry-policy.md) the reasoning.
 
@@ -92,8 +92,15 @@ $result = Ragbridge::query('How many days of leave do employees get?');
 ```
 
 Besides `query()` and the document methods, the client can search without generating an
-answer (`search()`), run a multi-step question (`agent()`) and check the service
-(`health()` and `readiness()`). They are described in the [usage guide](usage.md).
+answer (`search()`), run a multi-step question (`agent()`), check the service
+(`health()` and `readiness()`) and keep documents in step with your records by your own
+ids (`putDocument()`, `getByExternalId()` and `deleteByExternalId()`, which need service 1.2.0
+or later). They are described in
+the [usage guide](usage.md). For example, from an observer or a queued job:
+
+```php
+Ragbridge::putDocument("article:{$article->id}", $article->title, $article->body, sourceUpdatedAt: $article->updated_at);
+```
 
 ## Setting a timeout
 

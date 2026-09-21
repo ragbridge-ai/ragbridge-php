@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 use Ragbridge\Exception\ApiException;
 use Ragbridge\Exception\AuthenticationException;
+use Ragbridge\Exception\ConflictException;
 use Ragbridge\Exception\InvalidResponseException;
 use Ragbridge\Exception\NotFoundException;
 use Ragbridge\Exception\RagbridgeException;
 use Ragbridge\Exception\RequestFailedException;
 use Ragbridge\Exception\ServerException;
+use Ragbridge\Exception\ServiceUnavailableException;
 use Ragbridge\Exception\TransportException;
 use Ragbridge\Exception\ValidationException;
 
@@ -22,6 +24,8 @@ it('implements the marker interface in every exception', function (string $class
     ValidationException::class,
     ServerException::class,
     RequestFailedException::class,
+    ConflictException::class,
+    ServiceUnavailableException::class,
 ]);
 
 it('groups the status based exceptions under ApiException', function (string $class): void {
@@ -32,6 +36,8 @@ it('groups the status based exceptions under ApiException', function (string $cl
     ValidationException::class,
     ServerException::class,
     RequestFailedException::class,
+    ConflictException::class,
+    ServiceUnavailableException::class,
 ]);
 
 it('carries the status code and the decoded body', function (string $class, int $status): void {
@@ -53,6 +59,8 @@ it('carries the status code and the decoded body', function (string $class, int 
     'server 500' => [ServerException::class, 500],
     'server 503' => [ServerException::class, 503],
     'rate limited' => [RequestFailedException::class, 429],
+    'conflict' => [ConflictException::class, 409],
+    'unavailable' => [ServiceUnavailableException::class, 503],
 ]);
 
 it('uses the detail message of the service when there is one', function (): void {
@@ -137,4 +145,9 @@ it('describes an invalid response', function (): void {
 
     expect($exception->getMessage())->toBe('Invalid response from the ragbridge service: body is not valid JSON')
         ->and($exception->getPrevious())->toBe($previous);
+});
+
+it('keeps the exceptions that were thrown before the specific ones existed as their parents', function (): void {
+    expect(get_parent_class(ConflictException::class))->toBe(RequestFailedException::class)
+        ->and(get_parent_class(ServiceUnavailableException::class))->toBe(ServerException::class);
 });
