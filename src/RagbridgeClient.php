@@ -1,0 +1,237 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Ragbridge;
+
+use Closure;
+use InvalidArgumentException;
+use JsonException;
+use Psr\Http\Client\ClientExceptionInterface;
+use Psr\Http\Client\ClientInterface;
+use Psr\Http\Message\RequestFactoryInterface;
+use Psr\Http\Message\RequestInterface;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\StreamFactoryInterface;
+use Psr\Http\Message\StreamInterface;
+use Ragbridge\Dto\QueryResult;
+use Ragbridge\Exception\ApiException;
+use Ragbridge\Exception\AuthenticationException;
+use Ragbridge\Exception\InvalidResponseException;
+use Ragbridge\Exception\NotFoundException;
+use Ragbridge\Exception\RequestFailedException;
+use Ragbridge\Exception\ServerException;
+use Ragbridge\Exception\TransportException;
+use Ragbridge\Exception\ValidationException;
+
+/**
+ * Client for the ragbridge HTTP API.
+ *
+ * The client only handles transport: it builds requests, sends them through the injected
+ * PSR-18 client and turns responses into typed objects or exceptions. Retrieval and
+ * generation happen in the service.
+ *
+ * Every failure is reported as an exception implementing
+ * {@see Exception\RagbridgeException}.
+ */
+final readonly class RagbridgeClient
+{
+    private string $baseUrl;
+
+    /**
+     * @param string $baseUrl root URL of the service, for example http://localhost:8000
+     * @param string|null $apiKey sent as a bearer token when set
+     *
+     * @throws InvalidArgumentException when the base URL is not an absolute http(s) URL
+     */
+    public function __construct(
+        private ClientInterface $httpClient,
+        private RequestFactoryInterface $requestFactory,
+        private StreamFactoryInterface $streamFactory,
+        string $baseUrl,
+        private ?string $apiKey = null,
+    ) {
+        $parts = parse_url($baseUrl);
+
+        if (
+            $parts === false
+            || ! in_array($parts['scheme'] ?? null, ['http', 'https'], true)
+            || ($parts['host'] ?? '') === ''
+        ) {
+            throw new InvalidArgumentException(sprintf(
+                'The base URL must be an absolute http or https URL, "%s" given.',
+                $baseUrl,
+            ));
+        }
+
+        $this->baseUrl = rtrim($baseUrl, '/');
+    }
+
+    /**
+     * Asks a question and returns the answer with the sources it is based on.
+     *
+     * @param int $topK number of chunks to retrieve, the service accepts 1 to 20
+     * @param SearchMode|null $mode retrieval strategy, the service default when null
+     * @param bool $explain include retrieval details in each source
+     *
+     * @throws Exception\RagbridgeException
+     */
+    public function query(
+        string $question,
+        int $topK = 5,
+        ?SearchMode $mode = null,
+        bool $explain = false,
+    ): QueryResult {
+        $body = ['question' => $question, 'top_k' => $topK];
+
+        if ($mode !== null) {
+            $body['mode'] = $mode->value;
+        }
+
+        if ($explain) {
+            $body['explain'] = true;
+        }
+
+        return $this->hydrate(QueryResult::fromArray(...), $this->object($this->send('POST', '/query', $body)));
+    }
+
+    /**
+     * Sends a request and returns the decoded JSON body, or null when the response has none.
+     *
+     * @param array<string, mixed>|null $json request body, encoded as JSON
+     * @param StreamInterface|null $stream raw request body, used instead of $json
+     *
+     * @throws Exception\RagbridgeException
+     */
+    private function send(
+        string $method,
+        string $path,
+        ?array $json = null,
+        ?StreamInterface $stream = null,
+        ?string $contentType = null,
+    ): mixed {
+        $request = $this->requestFactory
+            ->createRequest($method, $this->baseUrl . $path)
+            ->withHeader('Accept', 'application/json');
+
+        if ($this->apiKey !== null) {
+            $request = $request->withHeader('Authorization', 'Bearer ' . $this->apiKey);
+        }
+
+        if ($json !== null) {
+            $request = $request
+                ->withHeader('Content-Type', 'application/json')
+                ->withBody($this->streamFactory->createStream($this->encode($json)));
+        } elseif ($stream !== null) {
+            $request = $request
+                ->withHeader('Content-Type', $contentType ?? 'application/octet-stream')
+                ->withBody($stream);
+        }
+
+        $response = $this->dispatch($request);
+        $status = $response->getStatusCode();
+        $body = (string) $response->getBody();
+
+        if ($status < 200 || $status >= 300) {
+            throw $this->errorFor($status, $this->decodeLeniently($body));
+        }
+
+        return $body === '' ? null : $this->decode($body);
+    }
+
+    /**
+     * @throws TransportException
+     */
+    private function dispatch(RequestInterface $request): ResponseInterface
+    {
+        try {
+            return $this->httpClient->sendRequest($request);
+        } catch (ClientExceptionInterface $e) {
+            throw TransportException::fromThrowable($e);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function encode(array $data): string
+    {
+        try {
+            return json_encode($data, JSON_THROW_ON_ERROR);
+        } catch (JsonException $e) {
+            throw new InvalidArgumentException(
+                sprintf('The request body cannot be encoded as JSON: %s', $e->getMessage()),
+                0,
+                $e,
+            );
+        }
+    }
+
+    /**
+     * @throws InvalidResponseException
+     */
+    private function decode(string $body): mixed
+    {
+        try {
+            return json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException $e) {
+            throw InvalidResponseException::because('the body is not valid JSON', $e);
+        }
+    }
+
+    /**
+     * Error bodies are best effort: the exception is thrown whether or not they decode.
+     */
+    private function decodeLeniently(string $body): mixed
+    {
+        try {
+            return json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            return null;
+        }
+    }
+
+    private function errorFor(int $status, mixed $body): ApiException
+    {
+        return match (true) {
+            $status === 401, $status === 403 => AuthenticationException::fromResponse($status, $body),
+            $status === 404 => NotFoundException::fromResponse($status, $body),
+            $status === 422 => ValidationException::fromResponse($status, $body),
+            $status >= 500 => ServerException::fromResponse($status, $body),
+            default => RequestFailedException::fromResponse($status, $body),
+        };
+    }
+
+    /**
+     * @return array<mixed>
+     *
+     * @throws InvalidResponseException
+     */
+    private function object(mixed $decoded): array
+    {
+        if (! is_array($decoded) || array_is_list($decoded)) {
+            throw InvalidResponseException::because(sprintf('expected a JSON object, got %s', get_debug_type($decoded)));
+        }
+
+        return $decoded;
+    }
+
+    /**
+     * @template T
+     *
+     * @param Closure(array<mixed>): T $factory
+     * @param array<mixed> $data
+     *
+     * @return T
+     *
+     * @throws InvalidResponseException
+     */
+    private function hydrate(Closure $factory, array $data): mixed
+    {
+        try {
+            return $factory($data);
+        } catch (InvalidArgumentException $e) {
+            throw InvalidResponseException::because($e->getMessage(), $e);
+        }
+    }
+}
