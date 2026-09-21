@@ -76,6 +76,8 @@ services:
     build:
       context: https://github.com/ragbridge-ai/ragbridge.git#7ce2c532bf4439e2d3d82f99d94fd58bdfb6700b
     command: ["arq", "ragbridge.worker.WorkerSettings"]
+    # The worker exits when it loses its connection to Redis, and comes back with it.
+    restart: unless-stopped
     environment: *service-environment
     extra_hosts:
       - "host.docker.internal:host-gateway"
