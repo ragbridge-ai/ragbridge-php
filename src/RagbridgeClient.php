@@ -35,13 +35,16 @@ use Ragbridge\Internal\MultipartFile;
  * PSR-18 client and turns responses into typed objects or exceptions. Retrieval and
  * generation happen in the service.
  *
+ * The class is not final so that applications and framework facades can replace it with a
+ * test double. Its state is immutable.
+ *
  * A failed call is reported as an exception implementing {@see Exception\RagbridgeException}.
  * Invalid arguments, such as a malformed base URL or a missing file, raise an
  * InvalidArgumentException instead.
  */
-final readonly class RagbridgeClient
+class RagbridgeClient
 {
-    private string $baseUrl;
+    private readonly string $baseUrl;
 
     /**
      * @param string $baseUrl root URL of the service, for example http://localhost:8000
@@ -50,11 +53,11 @@ final readonly class RagbridgeClient
      * @throws InvalidArgumentException when the base URL is not an absolute http(s) URL
      */
     public function __construct(
-        private ClientInterface $httpClient,
-        private RequestFactoryInterface $requestFactory,
-        private StreamFactoryInterface $streamFactory,
+        private readonly ClientInterface $httpClient,
+        private readonly RequestFactoryInterface $requestFactory,
+        private readonly StreamFactoryInterface $streamFactory,
         string $baseUrl,
-        private ?string $apiKey = null,
+        private readonly ?string $apiKey = null,
     ) {
         $parts = parse_url($baseUrl);
 

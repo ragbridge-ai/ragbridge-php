@@ -55,3 +55,10 @@ it('reports a clear error when no HTTP client can be found', function (): void {
     expect(fn() => RagbridgeClient::create('http://localhost:8000'))
         ->toThrow(DiscoveryNotFoundException::class);
 });
+
+it('can be replaced by a test double', function (): void {
+    $class = new ReflectionClass(RagbridgeClient::class);
+
+    expect($class->isFinal())->toBeFalse()
+        ->and($class->isReadOnly())->toBeFalse();
+});
