@@ -12,14 +12,20 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  COMPOSER_FLAGS: --prefer-dist --no-progress --no-interaction
+
 jobs:
+  # Code style, static analysis and every test suite, with the newest dependencies and with
+  # the oldest ones the version constraints allow.
   ci:
-    name: ci (PHP ${{ matrix.php }})
+    name: ci (PHP ${{ matrix.php }}, ${{ matrix.dependencies }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         php: ['8.2', '8.3', '8.4']
+        dependencies: [highest, lowest]
 
     steps:
       - name: Check out the repository
@@ -40,18 +46,201 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
-          key: composer-${{ runner.os }}-php${{ matrix.php }}-${{ hashFiles('composer.json') }}
+          key: composer-${{ runner.os }}-php${{ matrix.php }}-${{ matrix.dependencies }}-${{ hashFiles('composer.json') }}
           restore-keys: |
-            composer-${{ runner.os }}-php${{ matrix.php }}-
+            composer-${{ runner.os }}-php${{ matrix.php }}-${{ matrix.dependencies }}-
 
-      - name: Install dependencies
-        run: composer install --prefer-dist --no-progress --no-interaction
+      # composer.json pins the platform to PHP 8.2 for local development. CI resolves for the
+      # PHP version that is actually running.
+      - name: Resolve dependencies for the running PHP version
+        run: composer config --unset platform.php
+
+      - name: Install the newest dependencies
+        if: matrix.dependencies == 'highest'
+        run: composer update ${{ env.COMPOSER_FLAGS }}
+
+      - name: Install the oldest dependencies
+        if: matrix.dependencies == 'lowest'
+        run: composer update ${{ env.COMPOSER_FLAGS }} --prefer-lowest --prefer-stable
 
       - name: Check code style
         run: composer lint
 
+      # The oldest development tools have older type information, so static analysis is only
+      # meaningful with the newest ones.
       - name: Run static analysis
+        if: matrix.dependencies == 'highest'
         run: composer stan
 
       - name: Run tests
         run: composer test
+
+  # The Laravel integration on its own, with the Symfony packages removed.
+  laravel:
+    name: laravel (PHP ${{ matrix.php }}, Laravel ${{ matrix.laravel }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { php: '8.2', laravel: '12', testbench: '10.*' }
+          - { php: '8.4', laravel: '12', testbench: '10.*' }
+          - { php: '8.3', laravel: '13', testbench: '11.*' }
+          - { php: '8.4', laravel: '13', testbench: '11.*' }
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Locate the Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer downloads
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-laravel${{ matrix.laravel }}-php${{ matrix.php }}-${{ hashFiles('composer.json') }}
+          restore-keys: |
+            composer-${{ runner.os }}-laravel${{ matrix.laravel }}-php${{ matrix.php }}-
+
+      - name: Install Laravel ${{ matrix.laravel }} without the Symfony packages
+        run: |
+          composer config --unset platform.php
+          composer remove --dev symfony/config symfony/dependency-injection symfony/http-client symfony/http-kernel --no-update
+          composer require --dev "orchestra/testbench:${{ matrix.testbench }}" --with-all-dependencies --no-update
+          composer update ${{ env.COMPOSER_FLAGS }}
+          composer show laravel/framework | grep '^versions'
+
+      - name: Run the core and Laravel tests
+        run: composer test:laravel
+
+  # The Symfony integration on its own, with the Laravel packages removed.
+  symfony:
+    name: symfony (PHP ${{ matrix.php }}, Symfony ${{ matrix.symfony }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { php: '8.2', symfony: '6.4.*' }
+          - { php: '8.2', symfony: '7.*' }
+          - { php: '8.4', symfony: '7.*' }
+          - { php: '8.4', symfony: '8.*' }
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Locate the Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer downloads
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-symfony${{ matrix.symfony }}-php${{ matrix.php }}-${{ hashFiles('composer.json') }}
+          restore-keys: |
+            composer-${{ runner.os }}-symfony${{ matrix.symfony }}-php${{ matrix.php }}-
+
+      - name: Install Symfony ${{ matrix.symfony }} without the Laravel packages
+        run: |
+          composer config --unset platform.php
+          composer remove --dev orchestra/testbench --no-update
+          composer require --dev "symfony/config:${{ matrix.symfony }}" "symfony/dependency-injection:${{ matrix.symfony }}" "symfony/http-kernel:${{ matrix.symfony }}" "symfony/http-client:${{ matrix.symfony }}" --with-all-dependencies --no-update
+          composer update ${{ env.COMPOSER_FLAGS }}
+          composer show symfony/dependency-injection | grep '^versions'
+
+      - name: Run the core and Symfony tests
+        run: composer test:symfony
+
+  # The package metadata must stay valid for Packagist.
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate composer.json
+        run: composer validate --strict --no-check-lock
+
+  # The client against a real ragbridge service, started with Docker Compose. The tests are
+  # skipped everywhere else because they need this service.
+  integration:
+    name: integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+
+      - name: Locate the Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer downloads
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-integration-${{ hashFiles('composer.json') }}
+          restore-keys: |
+            composer-${{ runner.os }}-integration-
+
+      - name: Install dependencies
+        run: |
+          composer config --unset platform.php
+          composer update ${{ env.COMPOSER_FLAGS }}
+
+      # A small model keeps the job fast on a runner without a GPU. The tests check the
+      # structure of answers and sources, not the wording.
+      - name: Start the ragbridge service
+        env:
+          CHAT_MODEL: ollama/qwen2.5:0.5b
+        run: |
+          tests/Integration/start.sh > "$RUNNER_TEMP/service.env"
+          echo "::add-mask::$(sed -n 's/^export RAGBRIDGE_INTEGRATION_API_KEY=//p' "$RUNNER_TEMP/service.env")"
+          sed 's/^export //' "$RUNNER_TEMP/service.env" >> "$GITHUB_ENV"
+          rm "$RUNNER_TEMP/service.env"
+
+      - name: Run the integration tests
+        run: vendor/bin/pest --group=integration
+
+      - name: Show the service logs
+        if: failure()
+        run: docker compose -f tests/Integration/compose.yaml --profile ollama logs --tail=200 app
+
+      - name: Stop the service
+        if: always()
+        run: docker compose -f tests/Integration/compose.yaml --profile ollama down --volumes

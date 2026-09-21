@@ -9,25 +9,37 @@ from plain PHP, Laravel and Symfony applications.
 Retrieval, embedding and generation all happen in the service. This package handles
 transport, typed responses, error handling and framework wiring.
 
+## Shipped
+
+- **Core client.** A framework-independent client for uploading, listing, fetching and
+  deleting documents and for querying, with typed response objects and an exception
+  hierarchy.
+- **Laravel and Symfony integrations.** A service provider and facade for Laravel, and a
+  bundle for Symfony, both configured from the application's own configuration.
+- **Stable release.** Version 1.0 with a quick start guide, an example application and a
+  documented public API. See the [changelog](../CHANGELOG.md).
+
 ## Planned
 
-Work is listed in the order it is intended to land. Items describe intent, not commitments
-or dates.
+Work is listed as intent, not as commitments or dates. New features are added in minor
+releases, so none of it breaks the 1.0 API.
 
-1. **Core client.** A framework-independent client for uploading and listing documents,
-   deleting documents and querying, with typed response objects and a clear exception
-   hierarchy.
-2. **Laravel and Symfony integrations.** A service provider and facade for Laravel, and a
-   bundle for Symfony, both configured from the application's own configuration.
-3. **Queued data sync.** Keep the service in step with application data by indexing
-   Eloquent models and Doctrine entities through the framework's queue. The application
-   decides what text is indexed, and creates, updates and deletes are idempotent.
-   *Depends on the service:* this item requires support for external identifiers in the
-   service, that is, creating or replacing a document and deleting it by an identifier
-   chosen by the application. Work on it starts once a released version of the service
-   includes that support.
-4. **Stable release.** A 1.0 release with a quick start guide, an example application and a
-   documented public API.
+- **Queued data sync.** Keep the service in step with application data by indexing
+  Eloquent models and Doctrine entities through the framework's queue. The application
+  decides what text is indexed, and creates, updates and deletes are idempotent.
+  *Depends on the service:* this item requires support for external identifiers in the
+  service, that is, creating or replacing a document and deleting it by an identifier
+  chosen by the application. Work on it starts once a released version of the service
+  includes that support.
+- **The remaining service endpoints.** Client methods for searching without generating an
+  answer, for multi-step questions, and for the health checks.
+- **Retries with backoff.** Optional, configurable retries of requests that fail for
+  transient reasons, such as a connection error or a 5xx response, with exponential backoff.
+- **Streaming answers.** Receiving an answer while it is generated. *Depends on the
+  service,* which does not offer streaming today.
+- **WordPress integration.** Use of the client from WordPress plugins and themes. The core
+  has no framework dependency ([ADR 0003](adr/0003-framework-independent-core.md)), so this
+  needs configuration and wiring, not changes to the client.
 
 ## Out of scope
 

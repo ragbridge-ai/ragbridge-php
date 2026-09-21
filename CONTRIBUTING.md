@@ -25,11 +25,44 @@ Every change must pass all three checks. CI runs them on PHP 8.2, 8.3 and 8.4.
 | `composer stan`     | Runs PHPStan at level `max` with the strict-rules rules |
 | `composer lint`     | Checks code style with Laravel Pint (no files changed) |
 | `composer check`    | Runs lint, stan and test                               |
+| `composer test:laravel` | Runs the core and Laravel tests only               |
+| `composer test:symfony` | Runs the core and Symfony tests only               |
 
 To fix style issues automatically, run `vendor/bin/pint`.
 
+The Laravel and Symfony integrations are tested on their own in CI, with the other
+framework's packages removed, so neither may depend on the other. The pipeline also runs the
+whole suite against the oldest dependency versions the constraints allow, so do not rely on
+a feature that a newer release of a dependency introduced.
+
 Tests must not call a live service. Use the mock HTTP client and the JSON fixtures in
 `tests/Fixtures/` instead.
+
+## Integration tests
+
+Most tests never call a live service. A separate group of integration tests runs the client
+against a real ragbridge service. They are skipped unless the environment variables
+`RAGBRIDGE_INTEGRATION_URL` and `RAGBRIDGE_INTEGRATION_API_KEY` are set, so `composer test`
+does not need Docker or a network.
+
+`tests/Integration/start.sh` starts the service with Docker Compose, creates an API key and
+prints the variables:
+
+```bash
+eval "$(tests/Integration/start.sh)"
+vendor/bin/pest --group=integration
+
+docker compose -f tests/Integration/compose.yaml --profile ollama down --volumes
+```
+
+The first run builds the service from source and downloads the models, which takes a while.
+If Ollama already runs on your machine, use it instead and skip the downloads:
+
+```bash
+eval "$(RAGBRIDGE_INTEGRATION_OLLAMA=host tests/Integration/start.sh)"
+```
+
+CI runs the group in its own job, `integration`.
 
 ## Coding rules
 

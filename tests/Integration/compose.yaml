@@ -1,0 +1,68 @@
+# The ragbridge service and its dependencies, for the opt-in integration tests.
+#
+#   tests/Integration/start.sh        starts the stack and prints the environment for the tests
+#   docker compose -f tests/Integration/compose.yaml --profile ollama down --volumes   removes it
+#
+# The service is built from source at a pinned commit. Update the pin when the client starts
+# to use a newer version of the service API.
+
+name: ragbridge-php-integration
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: ragbridge
+      POSTGRES_PASSWORD: ragbridge
+      POSTGRES_DB: ragbridge
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ragbridge -d ragbridge"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+  # Local model runtime for embeddings and answers. Enable it with `--profile ollama`; leave
+  # it out to use an Ollama that already runs on the host (see OLLAMA_BASE_URL below).
+  ollama:
+    profiles: [ollama]
+    image: ollama/ollama:0.34.2
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 3s
+      timeout: 10s
+      retries: 20
+
+  app:
+    build:
+      context: https://github.com/ragbridge-ai/ragbridge.git#7cd69ef46c452ccc43bdc93c15989982bc5d9389
+    environment:
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql+psycopg://ragbridge:ragbridge@postgres:5432/ragbridge
+      REDIS_URL: redis://redis:6379/0
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-ollama/nomic-embed-text}
+      EMBEDDING_DIMENSION: "768"
+      CHAT_MODEL: ${CHAT_MODEL:-ollama/llama3.2}
+      CHAT_TEMPERATURE: "0"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${RAGBRIDGE_INTEGRATION_PORT:-18000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
