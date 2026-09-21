@@ -57,7 +57,10 @@
         "laravel": {
             "providers": [
                 "Ragbridge\\Laravel\\RagbridgeServiceProvider"
-            ]
+            ],
+            "aliases": {
+                "Ragbridge": "Ragbridge\\Laravel\\Facades\\Ragbridge"
+            }
         }
     }
 }
