@@ -14,7 +14,7 @@ The first stable release. It contains everything from the development milestones
 
 ### Added
 
-- Definition of the public API and the versioning policy in the README.
+- Definition of the public API and the versioning policy (`docs/versioning.md`).
 - Quick start guide (`docs/quickstart.md`) for plain PHP, Laravel and Symfony, and an
   example application (`examples/basic`).
 - Support for PHP 8.2, 8.3 and 8.4, Laravel 12 and 13, and Symfony 6.4, 7 and 8, verified in
@@ -38,7 +38,7 @@ releases.
 - Symfony integration: `RagbridgeBundle` with a `ragbridge` configuration (`base_url`,
   `api_key`) that registers an autowirable `RagbridgeClient`, using the application's
   `http_client` through `Psr18Client` when `symfony/http-client` is installed.
-- README sections for both integrations and ADR 0005 on keeping them in this package.
+- Laravel and Symfony guides and ADR 0005 on keeping the integrations in this package.
 
 #### Changed
 
