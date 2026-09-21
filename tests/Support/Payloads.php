@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ragbridge\Tests\Support;
 
+use Psr\Http\Message\ResponseInterface;
 use RuntimeException;
 
 /**
@@ -170,5 +171,25 @@ final class Payloads
             'step_count' => 1,
             ...$overrides,
         ];
+    }
+
+    /**
+     * The body of a PUT to /documents/external/{id}.
+     *
+     * @param array<string, mixed> $document overrides for the document
+     *
+     * @return array<string, mixed>
+     */
+    public static function syncResult(string $result = 'created', array $document = []): array
+    {
+        return ['result' => $result, 'document' => self::externalDocument($document)];
+    }
+
+    /**
+     * @param array<string, mixed> $document overrides for the document
+     */
+    public static function syncResponse(int $status, string $result = 'created', array $document = []): ResponseInterface
+    {
+        return Fixtures::response($status, json_encode(self::syncResult($result, $document), JSON_THROW_ON_ERROR));
     }
 }

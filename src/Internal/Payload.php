@@ -168,6 +168,18 @@ final readonly class Payload
     }
 
     /**
+     * @return array<mixed>
+     */
+    public function object(string $key): array
+    {
+        $value = $this->required($key);
+
+        return is_array($value) && ! array_is_list($value)
+            ? $value
+            : throw $this->wrongType($key, 'an object', $value);
+    }
+
+    /**
      * @return list<array<mixed>>
      */
     public function objects(string $key): array
