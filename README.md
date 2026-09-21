@@ -185,6 +185,139 @@ Responses are immutable objects with typed properties (`Document`, `QueryResult`
 `Source`, `RetrievalInfo`) rather than arrays. See
 [ADR 0004](docs/adr/0004-typed-response-objects.md) for the reasoning.
 
+## Framework integrations
+
+The core client works anywhere. The Laravel and Symfony integrations add configuration and
+service registration on top of it. They are independent: each works without the other
+framework installed, and the core never depends on either
+([ADR 0003](docs/adr/0003-framework-independent-core.md),
+[ADR 0005](docs/adr/0005-integrations-in-one-package.md)).
+
+### Laravel
+
+Supported: Laravel 11 and 12. The service provider and the `Ragbridge` alias are
+discovered automatically, so installing the package is enough. Set the connection in
+`.env`:
+
+```dotenv
+RAGBRIDGE_BASE_URL=http://localhost:8000
+RAGBRIDGE_API_KEY=your-api-key
+```
+
+`RAGBRIDGE_API_KEY` can be left out for a service that does not require one. To change the
+configuration file, publish it:
+
+```bash
+php artisan vendor:publish --tag=ragbridge-config
+```
+
+The client is a singleton in the container. Type-hint it, or use the facade:
+
+```php
+use Illuminate\Http\Request;
+use Ragbridge\Laravel\Facades\Ragbridge;
+use Ragbridge\RagbridgeClient;
+
+// Dependency injection
+final class AskController
+{
+    public function __invoke(Request $request, RagbridgeClient $ragbridge): string
+    {
+        return $ragbridge->query($request->string('question')->toString())->answer;
+    }
+}
+
+// Facade
+$result = Ragbridge::query('How many days of leave do employees get?');
+```
+
+The client sends requests through the PSR-18 client that discovery finds, which is Guzzle in
+a standard Laravel application. Guzzle has no timeout by default. To set one, bind the client
+yourself in a service provider:
+
+```php
+use GuzzleHttp\Client;
+use GuzzleHttp\Psr7\HttpFactory;
+use Ragbridge\RagbridgeClient;
+
+$this->app->singleton(RagbridgeClient::class, function () {
+    $factory = new HttpFactory();
+
+    return new RagbridgeClient(
+        new Client(['timeout' => 30]),
+        $factory,
+        $factory,
+        config('ragbridge.base_url'),
+        config('ragbridge.api_key'),
+    );
+});
+```
+
+In tests, replace the facade with a mock:
+
+```php
+use Ragbridge\Dto\QueryResult;
+use Ragbridge\Laravel\Facades\Ragbridge;
+
+Ragbridge::shouldReceive('query')
+    ->once()
+    ->with('How many days of leave do employees get?')
+    ->andReturn(new QueryResult('25 days.', []));
+```
+
+### Symfony
+
+Supported: Symfony 6.4 and 7. Install the package together with the HTTP client and a PSR-17
+implementation:
+
+```bash
+composer require ragbridge/php symfony/http-client nyholm/psr7
+```
+
+Register the bundle in `config/bundles.php`:
+
+```php
+return [
+    // ...
+    Ragbridge\Symfony\RagbridgeBundle::class => ['all' => true],
+];
+```
+
+Configure it in `config/packages/ragbridge.yaml`:
+
+```yaml
+ragbridge:
+    base_url: '%env(RAGBRIDGE_BASE_URL)%'    # required
+    api_key: '%env(default::RAGBRIDGE_API_KEY)%'    # optional
+```
+
+```dotenv
+RAGBRIDGE_BASE_URL=http://localhost:8000
+RAGBRIDGE_API_KEY=your-api-key
+```
+
+The client is registered for autowiring, and as the `ragbridge.client` service alias:
+
+```php
+use Ragbridge\RagbridgeClient;
+
+final class AskController
+{
+    public function __construct(private RagbridgeClient $ragbridge) {}
+
+    public function __invoke(Request $request): Response
+    {
+        $result = $this->ragbridge->query((string) $request->query->get('question'));
+
+        return new Response($result->answer);
+    }
+}
+```
+
+Requests are sent through the application's `http_client` service, so its options, such as
+timeouts, and the profiler apply. Set them under `framework.http_client`. Without
+`symfony/http-client` the bundle falls back to whatever PSR-18 client discovery finds.
+
 ## Documentation
 
 - [Roadmap](docs/roadmap.md)
