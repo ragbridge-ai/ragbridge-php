@@ -7,6 +7,11 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-22
+
+Adds documents identified by an id of your application, for keeping the service in step with
+your records. It needs ragbridge service 1.2.0 or later. Existing code behaves as before.
+
 ### Added
 
 - Documents identified by an id of your application, which need ragbridge service 1.2.0 or
@@ -116,6 +121,7 @@ releases.
   Actions, roadmap, architecture decision records, contributing guide, security policy and
   code of conduct.
 
-[Unreleased]: https://github.com/ragbridge-ai/ragbridge-php/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/ragbridge-ai/ragbridge-php/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/ragbridge-ai/ragbridge-php/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/ragbridge-ai/ragbridge-php/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/ragbridge-ai/ragbridge-php/releases/tag/v1.0.0
