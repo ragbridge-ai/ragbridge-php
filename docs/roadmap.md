@@ -20,7 +20,12 @@ or dates.
 2. **Laravel and Symfony integrations.** A service provider and facade for Laravel, and a
    bundle for Symfony, both configured from the application's own configuration.
 3. **Queued data sync.** Keep the service in step with application data by indexing
-   Eloquent models and Doctrine entities through the framework's queue.
+   Eloquent models and Doctrine entities through the framework's queue. The application
+   decides what text is indexed, and creates, updates and deletes are idempotent.
+   *Depends on the service:* this item requires support for external identifiers in the
+   service, that is, creating or replacing a document and deleting it by an identifier
+   chosen by the application. Work on it starts once a released version of the service
+   includes that support.
 4. **Stable release.** A 1.0 release with a quick start guide, an example application and a
    documented public API.
 
