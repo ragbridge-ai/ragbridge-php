@@ -8,6 +8,7 @@ use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
 use InvalidArgumentException;
+use Ragbridge\Laravel\Sync\SyncCommand;
 use Ragbridge\RagbridgeClient;
 use Ragbridge\RetryPolicy;
 
@@ -80,6 +81,7 @@ final class RagbridgeServiceProvider extends ServiceProvider
     {
         if ($this->app->runningInConsole()) {
             $this->publishes([self::configPath() => $this->app->configPath('ragbridge.php')], self::CONFIG_TAG);
+            $this->commands([SyncCommand::class]);
         }
     }
 

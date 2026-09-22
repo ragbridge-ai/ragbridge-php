@@ -7,6 +7,24 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Queued data sync: keeps the service in step with application data by reconciling
+  documents from Eloquent models or Doctrine entities. A model or entity opts in by
+  implementing `Ragbridge\Sync\Syncable`; `Ragbridge\Sync\HasExternalId` lets it choose its
+  own external id, and `Ragbridge\Sync\ShouldSyncToRagbridge` lets it remove itself from
+  the service beyond what its document says. It needs ragbridge service 1.2.0 or later, see
+  [Sync](docs/sync.md) and [ADR 0007](docs/adr/0007-queued-data-sync.md).
+- In Laravel, the `Ragbridge\Laravel\Sync\SyncsWithRagbridge` trait queues a job after a
+  model is saved, deleted or restored, once the enclosing transaction commits. The
+  `ragbridge:sync` Artisan command backfills existing records.
+- In Symfony, a Doctrine listener dispatches a Messenger message once a flush that changed
+  a `Syncable` entity succeeds, and a handler reconciles it. Registered by the bundle only
+  when `symfony/messenger` and `doctrine/orm` are both installed; neither is required by
+  the package. The `ragbridge:sync` console command backfills existing records.
+- `ragbridge.sync` configuration: `enabled`, and, in Laravel, `connection` and `queue` for
+  the dispatched job.
+
 ## [1.2.0] - 2026-09-22
 
 Adds documents identified by an id of your application, for keeping the service in step with

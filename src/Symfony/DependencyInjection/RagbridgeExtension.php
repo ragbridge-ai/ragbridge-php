@@ -4,8 +4,14 @@ declare(strict_types=1);
 
 namespace Ragbridge\Symfony\DependencyInjection;
 
+use Doctrine\ORM\EntityManagerInterface;
 use Ragbridge\RagbridgeClient;
 use Ragbridge\Symfony\RetryPolicyFactory;
+use Ragbridge\Symfony\Sync\EntityChangeListener;
+use Ragbridge\Symfony\Sync\EntityExternalId;
+use Ragbridge\Symfony\Sync\SyncCommand;
+use Ragbridge\Symfony\Sync\SyncMessageHandler;
+use Ragbridge\Sync\Reconciler;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -13,6 +19,7 @@ use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Extension\Extension;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\HttpClient\Psr18Client;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
  * Registers the ragbridge client.
@@ -68,6 +75,43 @@ final class RagbridgeExtension extends Extension
 
         $container->setDefinition(RagbridgeClient::class, $this->clientDefinition($container, $this->retryPolicyDefinition($retry)));
         $container->setAlias('ragbridge.client', RagbridgeClient::class);
+
+        $this->registerSync($container, $config['sync']);
+    }
+
+    /**
+     * Registers the Doctrine listener, the Messenger handler and the console command, only
+     * when both symfony/messenger and doctrine/orm are installed. Neither is required by
+     * the package; an application without them sees nothing extra in its container.
+     *
+     * @param mixed $sync the processed `sync` configuration
+     */
+    private function registerSync(ContainerBuilder $container, mixed $sync): void
+    {
+        assert(is_array($sync));
+
+        if (! interface_exists(MessageBusInterface::class) || ! interface_exists(EntityManagerInterface::class)) {
+            return;
+        }
+
+        $container->register(Reconciler::class)->setAutowired(true);
+        $container->register(EntityExternalId::class)->setAutowired(true);
+
+        $container->register(EntityChangeListener::class)
+            ->setAutowired(true)
+            ->setArgument('$enabled', $sync['enabled'])
+            ->addTag('doctrine.event_listener', ['event' => 'postPersist'])
+            ->addTag('doctrine.event_listener', ['event' => 'postUpdate'])
+            ->addTag('doctrine.event_listener', ['event' => 'preRemove'])
+            ->addTag('doctrine.event_listener', ['event' => 'postFlush']);
+
+        $container->register(SyncMessageHandler::class)
+            ->setAutowired(true)
+            ->addTag('messenger.message_handler');
+
+        $container->register(SyncCommand::class)
+            ->setAutowired(true)
+            ->addTag('console.command', ['command' => 'ragbridge:sync']);
     }
 
     /**

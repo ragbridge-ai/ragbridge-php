@@ -53,6 +53,7 @@ Laravel and Symfony, follow the framework guides below.
 | [Usage](docs/usage.md) | Creating a client, uploading documents, asking questions and handling errors |
 | [Laravel](docs/laravel.md) | Installation, configuration, facade and testing |
 | [Symfony](docs/symfony.md) | Bundle setup, configuration and the HTTP client |
+| [Sync](docs/sync.md) | Keeping Eloquent models or Doctrine entities in step with the service through a queue |
 | [Example application](examples/) | A small upload-and-ask app to run and read |
 | [Versioning](docs/versioning.md) | The public API that semantic versioning covers |
 | [Roadmap](docs/roadmap.md), [Changelog](CHANGELOG.md), [Decisions](docs/adr/) | Where the project is going, what changed, and why |

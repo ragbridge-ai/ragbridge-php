@@ -27,18 +27,18 @@ transport, typed responses, error handling and framework wiring.
   that your application uses for the record, with a typed result, a helper that waits for
   large text to be processed, and separate exceptions for a conflict and an unavailable
   service. They need ragbridge service 1.2.0 or later.
+- **Queued data sync.** Keeps the service in step with application data by indexing Eloquent
+  models, through the Laravel queue, and Doctrine entities, through Symfony Messenger. The
+  application decides what text is indexed and whether a record belongs in the service at
+  all; every change is reconciled, not replayed, so creates, updates and deletes are
+  idempotent regardless of delivery order. A console command backfills existing records.
+  See [Sync](sync.md) and [ADR 0007](adr/0007-queued-data-sync.md).
 
 ## Planned
 
 Work is listed as intent, not as commitments or dates. New features are added in minor
 releases, so none of it breaks the 1.0 API.
 
-- **Queued data sync.** Keep the service in step with application data by indexing
-  Eloquent models and Doctrine entities through the framework's queue. The application
-  decides what text is indexed, and creates, updates and deletes are idempotent. It builds
-  on the client methods for documents by external id, which are shipped; what remains is
-  the framework part: observers or listeners, queued jobs, the mapping from a model to a
-  document, and their configuration.
 - **Streaming answers.** Receiving an answer while it is generated. *Depends on the
   service,* which does not offer streaming today.
 - **WordPress integration.** Use of the client from WordPress plugins and themes. The core

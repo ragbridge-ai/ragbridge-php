@@ -162,7 +162,7 @@ jobs:
         run: |
           composer config --unset platform.php
           composer remove --dev orchestra/testbench --no-update
-          composer require --dev "symfony/config:${{ matrix.symfony }}" "symfony/dependency-injection:${{ matrix.symfony }}" "symfony/http-kernel:${{ matrix.symfony }}" "symfony/http-client:${{ matrix.symfony }}" --with-all-dependencies --no-update
+          composer require --dev "symfony/config:${{ matrix.symfony }}" "symfony/dependency-injection:${{ matrix.symfony }}" "symfony/http-kernel:${{ matrix.symfony }}" "symfony/http-client:${{ matrix.symfony }}" "symfony/messenger:${{ matrix.symfony }}" --with-all-dependencies --no-update
           composer update ${{ env.COMPOSER_FLAGS }}
           composer show symfony/dependency-injection | grep '^versions'
 

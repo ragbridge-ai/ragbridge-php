@@ -95,12 +95,10 @@ Besides `query()` and the document methods, the client can search without genera
 answer (`search()`), run a multi-step question (`agent()`), check the service
 (`health()` and `readiness()`) and keep documents in step with your records by your own
 ids (`putDocument()`, `getByExternalId()` and `deleteByExternalId()`, which need service 1.2.0
-or later). They are described in
-the [usage guide](usage.md). For example, from an observer or a queued job:
+or later). They are described in the [usage guide](usage.md).
 
-```php
-Ragbridge::putDocument("article:{$article->id}", $article->title, $article->body, sourceUpdatedAt: $article->updated_at);
-```
+To keep Eloquent models in step with the service automatically, through the queue, see
+[Sync](sync.md#laravel).
 
 ## Setting a timeout
 

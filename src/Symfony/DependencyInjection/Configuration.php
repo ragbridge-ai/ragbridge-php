@@ -21,6 +21,8 @@ use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
  *         base_delay_ms: 200
  *         max_delay_ms: 10000
  *         retry_post: false
+ *     sync:                                   # optional; needs symfony/messenger and doctrine/orm
+ *         enabled: true
  * ```
  */
 final class Configuration implements ConfigurationInterface
@@ -78,6 +80,16 @@ final class Configuration implements ConfigurationInterface
                         ->booleanNode('retry_post')
                             ->info('Also retry POST requests (query, search, agent and uploads). A POST whose response was lost may already have been processed by the service.')
                             ->defaultFalse()
+                        ->end()
+                    ->end()
+                ->end()
+                ->arrayNode('sync')
+                    ->info('Keeps Doctrine entities in step with the service. Needs symfony/messenger and doctrine/orm; see docs/sync.md.')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->booleanNode('enabled')
+                            ->info('Turns the sync off, for tests or maintenance, without removing the listener.')
+                            ->defaultTrue()
                         ->end()
                     ->end()
                 ->end()
