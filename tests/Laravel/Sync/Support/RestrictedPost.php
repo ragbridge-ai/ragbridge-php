@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Ragbridge\Tests\Laravel\Sync\Support;
 
 use Illuminate\Database\Eloquent\Model;
-use Ragbridge\Laravel\Sync\ShouldSyncToRagbridge;
 use Ragbridge\Laravel\Sync\SyncsWithRagbridge;
+use Ragbridge\Sync\ShouldSyncToRagbridge;
 use Ragbridge\Sync\Syncable;
 use Ragbridge\Sync\SyncDocument;
 

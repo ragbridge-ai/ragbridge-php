@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Ragbridge\Sync\Reconciler;
+use Ragbridge\Sync\ShouldSyncToRagbridge;
 use Ragbridge\Sync\Syncable;
 use Ragbridge\Sync\SyncDocument;
 use Throwable;
