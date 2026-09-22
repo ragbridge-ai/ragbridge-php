@@ -55,4 +55,28 @@ return [
         'retry_post' => env('RAGBRIDGE_RETRY_POST', false),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Data sync
+    |--------------------------------------------------------------------------
+    |
+    | Applies to Eloquent models that use the Ragbridge\Laravel\Sync\SyncsWithRagbridge
+    | trait. There is no list of synced models here: implementing
+    | Ragbridge\Sync\Syncable is what opts a model in. See docs/sync.md.
+    |
+    | enabled     Turns the sync off, for tests or maintenance, without removing the
+    |             trait from the models.
+    | connection  Queue connection the sync job is dispatched on. Null uses the
+    |             application's default connection.
+    | queue       Queue name the sync job is dispatched on. Null uses the connection's
+    |             default queue.
+    |
+    */
+
+    'sync' => [
+        'enabled' => env('RAGBRIDGE_SYNC_ENABLED', true),
+        'connection' => env('RAGBRIDGE_SYNC_CONNECTION'),
+        'queue' => env('RAGBRIDGE_SYNC_QUEUE'),
+    ],
+
 ];

@@ -103,6 +103,9 @@ it('reads the configuration values from the environment', function (): void {
         'RAGBRIDGE_RETRY_BASE_DELAY_MS' => '100',
         'RAGBRIDGE_RETRY_MAX_DELAY_MS' => '2000',
         'RAGBRIDGE_RETRY_POST' => 'true',
+        'RAGBRIDGE_SYNC_ENABLED' => 'false',
+        'RAGBRIDGE_SYNC_CONNECTION' => 'redis',
+        'RAGBRIDGE_SYNC_QUEUE' => 'ragbridge-sync',
     ];
 
     foreach ($variables as $name => $value) {
@@ -127,6 +130,11 @@ it('reads the configuration values from the environment', function (): void {
             'max_delay_ms' => '2000',
             'retry_post' => true,
         ],
+        'sync' => [
+            'enabled' => false,
+            'connection' => 'redis',
+            'queue' => 'ragbridge-sync',
+        ],
     ]);
 });
 
@@ -137,6 +145,14 @@ it('keeps retries off unless the environment enables them', function (): void {
         'base_delay_ms' => 200,
         'max_delay_ms' => 10000,
         'retry_post' => false,
+    ]);
+});
+
+it('enables the sync and leaves its queue unrouted unless the environment overrides them', function (): void {
+    expect(require RagbridgeServiceProvider::configPath())->toHaveKey('sync', [
+        'enabled' => true,
+        'connection' => null,
+        'queue' => null,
     ]);
 });
 
