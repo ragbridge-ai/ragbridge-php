@@ -21,6 +21,8 @@ generation all happen in the service.
   of chunks, and optionally see why each chunk was found
 - Search without generating an answer, ask multi-step questions with the agent, and check
   that the service is alive and ready
+- Keep documents identified by your own id in step with your records, and, in Laravel and
+  Symfony, sync Eloquent models or Doctrine entities automatically through a queue
 - Optional retries with exponential backoff for transient failures, off by default
 - Typed, immutable response objects instead of arrays
 - One exception hierarchy for authentication, validation, transport and server errors
