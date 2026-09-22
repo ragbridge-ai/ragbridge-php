@@ -36,7 +36,10 @@ whole suite against the oldest dependency versions the constraints allow, so do 
 a feature that a newer release of a dependency introduced.
 
 Tests must not call a live service. Use the mock HTTP client and the JSON fixtures in
-`tests/Fixtures/` instead.
+`tests/Fixtures/` instead. Saving a `Syncable` model or entity fixture triggers the real
+Laravel queue or Doctrine/Messenger dispatch, so a sync test must disable
+`ragbridge.sync.enabled` or install its mock client before the first fixture is saved, not
+after; see the existing tests under `tests/Laravel/Sync/` and `tests/Symfony/Sync/`.
 
 ## Integration tests
 
