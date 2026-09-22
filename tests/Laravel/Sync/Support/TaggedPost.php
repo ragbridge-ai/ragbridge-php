@@ -18,9 +18,6 @@ final class TaggedPost extends Model implements HasExternalId, Syncable
     use SyncsWithRagbridge;
     use TypedAttributes;
 
-    /** @var array<string> */
-    protected $guarded = [];
-
     public function toRagbridgeDocument(): SyncDocument
     {
         return new SyncDocument($this->stringAttribute('title'), $this->stringAttribute('body'));

@@ -20,9 +20,6 @@ final class Post extends Model implements Syncable
     use SyncsWithRagbridge;
     use TypedAttributes;
 
-    /** @var array<string> */
-    protected $guarded = [];
-
     protected function casts(): array
     {
         return ['published' => 'boolean'];

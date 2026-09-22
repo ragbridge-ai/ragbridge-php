@@ -19,9 +19,6 @@ final class RestrictedPost extends Model implements ShouldSyncToRagbridge, Synca
     use SyncsWithRagbridge;
     use TypedAttributes;
 
-    /** @var array<string> */
-    protected $guarded = [];
-
     protected function casts(): array
     {
         return ['visible' => 'boolean'];
