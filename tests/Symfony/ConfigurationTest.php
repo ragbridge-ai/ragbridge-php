@@ -26,14 +26,24 @@ function retryDefaults(): array
     return ['enabled' => false, 'max_attempts' => 3, 'base_delay_ms' => 200, 'max_delay_ms' => 10000, 'retry_post' => false];
 }
 
+/**
+ * The `sync` section of a configuration that does not mention it.
+ *
+ * @return array<string, mixed>
+ */
+function syncDefaults(): array
+{
+    return ['enabled' => true];
+}
+
 it('accepts a configuration with only the base URL', function (): void {
     expect(processedConfig([['base_url' => 'http://localhost:8000']]))
-        ->toBe(['base_url' => 'http://localhost:8000', 'api_key' => null, 'retry' => retryDefaults()]);
+        ->toBe(['base_url' => 'http://localhost:8000', 'api_key' => null, 'retry' => retryDefaults(), 'sync' => syncDefaults()]);
 });
 
 it('accepts a configuration with an API key', function (): void {
     expect(processedConfig([['base_url' => 'https://rag.example.com', 'api_key' => 'secret-key']]))
-        ->toBe(['base_url' => 'https://rag.example.com', 'api_key' => 'secret-key', 'retry' => retryDefaults()]);
+        ->toBe(['base_url' => 'https://rag.example.com', 'api_key' => 'secret-key', 'retry' => retryDefaults(), 'sync' => syncDefaults()]);
 });
 
 it('accepts environment variable placeholders', function (): void {
@@ -49,7 +59,7 @@ it('lets a later configuration override an earlier one', function (): void {
         ['base_url' => 'https://prod.example.com'],
     ]);
 
-    expect($config)->toBe(['base_url' => 'https://prod.example.com', 'api_key' => 'base-key', 'retry' => retryDefaults()]);
+    expect($config)->toBe(['base_url' => 'https://prod.example.com', 'api_key' => 'base-key', 'retry' => retryDefaults(), 'sync' => syncDefaults()]);
 });
 
 it('requires the base URL', function (): void {
@@ -134,5 +144,30 @@ describe('retry', function (): void {
     it('rejects unknown options', function (): void {
         expect(fn() => processedConfig([['base_url' => 'http://localhost:8000', 'retry' => ['jitter' => false]]]))
             ->toThrow(InvalidConfigurationException::class, 'Unrecognized option "jitter" under "ragbridge.retry"');
+    });
+});
+
+describe('sync', function (): void {
+    it('is enabled unless it is disabled', function (): void {
+        expect(processedConfig([['base_url' => 'http://localhost:8000']])['sync'])->toBe(syncDefaults());
+    });
+
+    it('can be disabled', function (): void {
+        $sync = processedConfig([['base_url' => 'http://localhost:8000', 'sync' => ['enabled' => false]]])['sync'];
+
+        expect($sync)->toBe(['enabled' => false]);
+    });
+
+    it('rejects a value that is not a boolean', function (mixed $value): void {
+        expect(fn() => processedConfig([['base_url' => 'http://localhost:8000', 'sync' => ['enabled' => $value]]]))
+            ->toThrow(InvalidConfigurationException::class);
+    })->with([
+        'string' => ['sometimes'],
+        'array' => [[true]],
+    ]);
+
+    it('rejects unknown options', function (): void {
+        expect(fn() => processedConfig([['base_url' => 'http://localhost:8000', 'sync' => ['connection' => 'redis']]]))
+            ->toThrow(InvalidConfigurationException::class, 'Unrecognized option "connection" under "ragbridge.sync"');
     });
 });
