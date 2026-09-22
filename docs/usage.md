@@ -212,6 +212,10 @@ The service compares the text by its hash, so a record that did not change costs
 and no embedding. The title is the document's name in the `filename` of the sources of an
 answer.
 
+In a Laravel or a Symfony application, [Sync](sync.md) does the model-to-document mapping
+and the job or message dispatch for you: implement one interface on the model or entity,
+and it is kept in step with the service automatically.
+
 `deleteByExternalId()` does not fail when there is no such document, so repeating a delete
 is safe. That holds for a valid id: an id with characters that are not allowed is a
 `ValidationException` (HTTP 422), as it is for the other two calls.

@@ -42,6 +42,7 @@ ragbridge:
 | `base_url` | yes      | Root URL of the ragbridge service, for example `http://localhost:8000` |
 | `api_key`  | no       | Sent to the service as a bearer token                                |
 | `retry`    | no       | Retries of requests that failed for a transient reason, off by default; see [Retries](#retries) |
+| `sync`     | no       | Keeps Doctrine entities in step with the service; see [Sync](sync.md#symfony) |
 
 Set the values in `.env.local`:
 
@@ -130,12 +131,14 @@ Besides `query()` and the document methods, the client can search without genera
 answer (`search()`), run a multi-step question (`agent()`), check the service
 (`health()` and `readiness()`) and keep documents in step with your records by your own
 ids (`putDocument()`, `getByExternalId()` and `deleteByExternalId()`, which need service 1.2.0
-or later). They are described in
-the [usage guide](usage.md).
+or later). They are described in the [usage guide](usage.md).
 
 The service id is `Ragbridge\RagbridgeClient`, with `ragbridge.client` as an alias. The
 configuration is also available as the container parameters `ragbridge.base_url` and
 `ragbridge.api_key`.
+
+To keep Doctrine entities in step with the service automatically, through Messenger, see
+[Sync](sync.md#symfony).
 
 ## HTTP client and timeouts
 
