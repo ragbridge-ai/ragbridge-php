@@ -13,6 +13,8 @@ or Symfony.
 The package is a small, typed client for the service's HTTP API. Retrieval, embedding and
 generation all happen in the service.
 
+**Read more:** [Bringing RAG to PHP: Architecture, Trade-offs, and Measurements](https://amir-shadanfar.medium.com/bringing-rag-to-php-architecture-trade-offs-and-measurements-e6d4e213527f), an overview of the service, this client, and the design decisions behind them.
+
 ## Features
 
 - Upload PDF, Markdown and plain-text documents, streamed from disk, and list, fetch and
